@@ -29,4 +29,5 @@ async def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "loveyourboyfriend-api",
+        "revision": settings.render_git_commit[:7],
     }

@@ -8,4 +8,5 @@ def test_health_returns_service_status(client: TestClient) -> None:
     assert response.json() == {
         "status": "ok",
         "service": "loveyourboyfriend-api",
+        "revision": "local",
     }

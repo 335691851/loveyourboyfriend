@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     )
 
     environment: Literal["development", "test", "production"] = "development"
+    render_git_commit: str = "local"
     allowed_origins: str = "http://localhost:3000"
 
     openai_api_key: str | None = None
