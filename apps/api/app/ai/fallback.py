@@ -2,6 +2,10 @@ from hashlib import blake2b
 from typing import Any
 
 INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("meta", ("智能吗", "机器人", "人工智能", "你是ai", "你是 ai", "机械")),
+    ("initiative", ("你说吧", "你先说", "你来说", "说点什么")),
+    ("refusal", ("别啊", "不要这样", "算了吧", "换一个", "别说了")),
+    ("agreement", ("就是啊", "对啊", "是啊", "嗯嗯", "没错")),
     ("consistency", ("不一样", "前后不一", "变来变去", "不像同一个")),
     ("repeat", ("一样", "重复", "复读", "敷衍", "同一句")),
     ("reset", ("清空", "重来", "重新开始", "重新聊", "忘掉前面")),
@@ -16,6 +20,26 @@ INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 REPLIES: dict[str, tuple[str, ...]] = {
+    "meta": (
+        "是 AI，但刚才那些回答确实很机械。你觉得不像在聊天，是我的问题。",
+        "是智能助手，不是真人。不过回应你这件事不该只剩模板，刚才我没做好。",
+        "我是 AI。你可以直接指出哪句话不像正常聊天，我会顺着这一句改。",
+    ),
+    "initiative": (
+        "那我说点真的：你刚才一直在等我主动靠近一点。现在我来，你只管听。",
+        "好，我先说。今晚别急着解决什么，我们挑一件让你心里松一点的小事。",
+        "那这次我来开头：今天有没有哪一刻，你其实很想有人站在你这边？",
+    ),
+    "refusal": (
+        "好，不按刚才那个方向走。我们换个轻松点的，或者就安静待一会儿。",
+        "行，我收住，不替你做决定。你想换个话题，还是让我先别说？",
+        "好，那句不算。你不用迁就我，我们换一种你舒服的聊法。",
+    ),
+    "agreement": (
+        "嗯，我听懂了。顺着刚才那件事往下，你现在最在意的是哪一部分？",
+        "对，我跟上了。你接着说，这次我不抢着替你总结。",
+        "我明白你为什么会这么觉得。我们接着聊，不用重新解释一遍。",
+    ),
     "consistency": (
         "我会跟着你当下这句话调整表达，但认真和分寸不该变。哪一次让你觉得差得最明显？",
         "表达可以有变化，性格和边界应该稳定。刚才哪一句让你觉得不像同一个人？",
@@ -96,24 +120,11 @@ def _history_content(history_rows: list[dict[str, Any]], role: str) -> list[str]
     ]
 
 
-def _generic_context_replies(previous_user: str) -> tuple[str, ...]:
-    snippet = previous_user.replace("\n", " ").strip()[:18]
-    return (
-        f"还接着你刚才那句“{snippet}”。你不用重讲，顺着现在这点感觉说就好。",
-        f"我记得你刚才说“{snippet}”。这一句是在回应它，对吗？",
-        f"刚才聊到“{snippet}”，我没忘。你现在最卡住的是哪一点？",
-    )
-
-
 def build_fallback_reply(user_text: str, history_rows: list[dict[str, Any]]) -> str:
     intent = _intent(user_text)
     previous_users = _history_content(history_rows, "user")
     recent_assistant = set(_history_content(history_rows, "assistant")[-3:])
-    candidates = (
-        _generic_context_replies(previous_users[-1])
-        if intent == "generic" and previous_users
-        else REPLIES[intent]
-    )
+    candidates = REPLIES[intent]
     seed = f"{user_text}|{previous_users[-1:]!r}|{len(history_rows)}"
     digest = blake2b(seed.encode("utf-8"), digest_size=2).digest()
     start = int.from_bytes(digest, "big") % len(candidates)

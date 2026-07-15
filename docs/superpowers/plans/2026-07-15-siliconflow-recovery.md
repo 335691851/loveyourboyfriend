@@ -92,6 +92,37 @@ Run: `uv run pytest tests/test_chat_service.py -q`
 
 Expected: all service tests pass.
 
+### Task 2.5: Qwen3.5 system-message compatibility
+
+**Files:**
+
+- Modify: `apps/api/app/ai/chains.py`
+- Modify: `apps/api/tests/test_chains.py`
+
+**Interfaces:**
+
+- Produces: a prompt whose first and only system message contains both role rules and long-term memories.
+
+- [ ] **Step 1: Capture the full chain HTTP payload**
+
+Use `httpx.MockTransport` around `build_chat_chain()` and assert message roles equal `system, user` when history is empty.
+
+- [ ] **Step 2: Verify RED**
+
+Run: `uv run pytest tests/test_chains.py::test_chat_chain_sends_only_one_leading_system_message -q`
+
+Expected: FAIL with roles `system, system, user`.
+
+- [ ] **Step 3: Merge role and memory instructions**
+
+Build one system prompt from `COMPANION_SYSTEM_PROMPT` followed by the `{memories}` section, then keep `MessagesPlaceholder("history")` and the current human message.
+
+- [ ] **Step 4: Verify GREEN**
+
+Run: `uv run pytest tests/test_chains.py -q`
+
+Expected: all chain tests pass and the captured system message includes the supplied memory.
+
 ### Task 3: Context-aware fallback engine
 
 **Files:**

@@ -50,8 +50,10 @@ def build_chat_chain(
 ) -> Runnable:
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", COMPANION_SYSTEM_PROMPT),
-            ("system", "以下是用户已经明确确认的长期记忆：\n{memories}"),
+            (
+                "system",
+                COMPANION_SYSTEM_PROMPT + "\n\n以下是用户已经明确确认的长期记忆：\n{memories}",
+            ),
             MessagesPlaceholder("history"),
             ("human", "{user_input}"),
         ]

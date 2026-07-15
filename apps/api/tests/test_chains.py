@@ -92,3 +92,45 @@ async def test_chat_model_sends_siliconflow_compatible_token_field() -> None:
     assert captured["max_tokens"] == 320
     assert captured["enable_thinking"] is False
     assert "max_completion_tokens" not in captured
+
+
+@pytest.mark.asyncio
+async def test_chat_chain_sends_only_one_leading_system_message() -> None:
+    captured: dict = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        stream = (
+            'data: {"id":"test","object":"chat.completion.chunk",'
+            '"created":1,"model":"Qwen/Qwen3.5-35B-A3B",'
+            '"choices":[{"index":0,"delta":{"content":"收到"},'
+            '"finish_reason":null}]}\n\n'
+            "data: [DONE]\n\n"
+        )
+        return httpx.Response(
+            200,
+            text=stream,
+            headers={"content-type": "text/event-stream"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        settings = Settings(
+            _env_file=None,
+            openai_api_key="test-key",
+            openai_base_url="https://api.siliconflow.cn/v1",
+            chat_model="Qwen/Qwen3.5-35B-A3B",
+        )
+        chain = build_chat_chain(model=build_chat_model(settings, http_async_client=client))
+        chunks = [
+            chunk
+            async for chunk in chain.astream(
+                {"history": [], "memories": "喜欢夜跑", "user_input": "晚上好"}
+            )
+        ]
+
+    assert "".join(chunks) == "收到"
+    assert [message["role"] for message in captured["messages"]] == [
+        "system",
+        "user",
+    ]
+    assert "喜欢夜跑" in captured["messages"][0]["content"]

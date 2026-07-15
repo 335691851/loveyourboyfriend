@@ -44,5 +44,19 @@ def test_generic_fallback_continues_the_previous_user_topic() -> None:
 
     reply = build_fallback_reply("就是啊", history)
 
-    assert "加班" in reply
-    assert "刚才" in reply
+    assert any(word in reply for word in ("听懂", "往下", "在意", "接着"))
+    assert "“最近一直加班到很晚”" not in reply
+    assert "你不用重讲" not in reply
+
+
+def test_fallback_handles_short_conversational_turns_naturally() -> None:
+    history = [{"role": "assistant", "content": "你想聊点什么？"}]
+
+    initiative = build_fallback_reply("你说吧", history)
+    refusal = build_fallback_reply("别啊", history)
+    meta = build_fallback_reply("你还是智能吗？", history)
+
+    assert any(word in initiative for word in ("我来", "那我说", "我先说"))
+    assert any(word in refusal for word in ("好", "不按", "换个"))
+    assert any(word in meta for word in ("AI", "智能", "机械"))
+    assert len({initiative, refusal, meta}) == 3

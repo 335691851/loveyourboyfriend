@@ -2,13 +2,14 @@
 
 ## 背景与根因
 
-生产日志持续出现 `BadRequestError`。对 LangChain 最终 HTTP 请求抓包后确认：`ChatOpenAI(max_tokens=320)` 被 `langchain-openai` 转换成了 `max_completion_tokens`，而 SiliconFlow Chat Completions 接口只接受 `max_tokens`。此外，SiliconFlow 当前接口最多接受 10 条 messages；现有服务最多传入 40 条历史消息，也需要同时收紧，避免长对话再次触发 400。
+生产日志持续出现 `BadRequestError`。对 LangChain 最终 HTTP 请求抓包后确认了两个兼容问题：`ChatOpenAI(max_tokens=320)` 被 `langchain-openai` 转换成了 `max_completion_tokens`，而 SiliconFlow Chat Completions 接口只接受 `max_tokens`；现有 Prompt 还连续发送两条 system message，而 Qwen3.5 对话模板只接受位于首位的一条 system message。此外，SiliconFlow 当前接口最多接受 10 条 messages；现有服务最多传入 40 条历史消息，也需要同时收紧，避免长对话再次触发 400。
 
 ## 目标
 
 - 主链继续使用 LangChain `ChatOpenAI` 与 `Qwen/Qwen3.5-35B-A3B`。
 - 最终 HTTP JSON 使用 `max_tokens`，不得出现 `max_completion_tokens`。
 - 关闭 Qwen 思考模式，优先快速输出自然正文。
+- 角色规则与长期记忆合并为首位唯一一条 system message。
 - 模型上下文总消息数不超过 SiliconFlow 的 10 条限制。
 - 上游失败时不重复固定一句话；兜底应结合当前输入、最近对话和角色边界，保持最低限度的连贯性。
 - 正常主模型回复恢复后，继续执行结构化长期记忆抽取。
@@ -21,7 +22,7 @@
 extra_body={"enable_thinking": False, "max_tokens": 320}
 ```
 
-记忆模型同样使用原始 `max_tokens: 256`。聊天服务只读取最近 7 条历史消息；加上两个 system message 和当前 human message，最终最多 10 条。
+记忆模型同样使用原始 `max_tokens: 256`。聊天服务只读取最近 7 条历史消息；加上合并后的一个 system message 和当前 human message，最终最多 9 条。
 
 测试必须通过 `httpx.MockTransport` 捕获 OpenAI SDK 最终发送的 JSON，而不是只检查 LangChain 模型属性。
 
