@@ -74,8 +74,9 @@ def test_siliconflow_models_disable_thinking_for_low_latency_output() -> None:
     chat_model = build_chat_model(settings)
     memory_model = build_memory_model(settings)
 
-    assert chat_model.extra_body == {"enable_thinking": False, "max_tokens": 320}
+    assert chat_model.extra_body == {"enable_thinking": False, "max_tokens": 180}
     assert chat_model.max_tokens is None
+    assert chat_model.temperature == 0.8
     assert chat_model.stream_chunk_timeout == 8
     assert chat_model.max_retries == 0
     assert memory_model.extra_body == {"enable_thinking": False, "max_tokens": 256}
@@ -114,8 +115,9 @@ async def test_chat_model_sends_siliconflow_compatible_token_field() -> None:
         chunks = [chunk async for chunk in model.astream("今天有点累")]
 
     assert "".join(str(chunk.content) for chunk in chunks) == "好"
-    assert captured["max_tokens"] == 320
+    assert captured["max_tokens"] == 180
     assert captured["enable_thinking"] is False
+    assert captured["temperature"] == 0.8
     assert "max_completion_tokens" not in captured
 
 
