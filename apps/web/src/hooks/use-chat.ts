@@ -20,7 +20,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   messageType: MessageMode;
-  createdAt: string;
+  createdAt: string | null;
   streaming?: boolean;
   audioUrl?: string;
   audioPath?: string;
@@ -32,7 +32,7 @@ const GREETING: ChatMessage = {
   role: "assistant",
   content: "你来了。今天过得怎么样？",
   messageType: "text",
-  createdAt: new Date().toISOString(),
+  createdAt: null,
 };
 
 function fromStored(message: StoredMessage): ChatMessage | null {

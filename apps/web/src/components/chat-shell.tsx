@@ -33,11 +33,13 @@ function MessageBubble({
   message: ChatMessage;
   onSpeak: () => void;
 }) {
-  const time = new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(message.createdAt));
+  const time = message.createdAt
+    ? new Intl.DateTimeFormat("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(new Date(message.createdAt))
+    : null;
   return (
     <div className={`message message-${message.role}`}>
       <div className="bubble">
@@ -66,7 +68,7 @@ function MessageBubble({
                 <Icon name="sound" />
               </button>
             )}
-          <time>{time}</time>
+          {time && <time>{time}</time>}
         </div>
       </div>
     </div>
