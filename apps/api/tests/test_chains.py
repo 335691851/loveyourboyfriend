@@ -1,3 +1,7 @@
+import json
+
+import httpx
+import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
 from app.ai.chains import build_chat_chain, build_chat_model, build_memory_model
@@ -45,9 +49,46 @@ def test_siliconflow_models_disable_thinking_for_low_latency_output() -> None:
     chat_model = build_chat_model(settings)
     memory_model = build_memory_model(settings)
 
-    assert chat_model.extra_body == {"enable_thinking": False}
-    assert chat_model.max_tokens == 320
+    assert chat_model.extra_body == {"enable_thinking": False, "max_tokens": 320}
+    assert chat_model.max_tokens is None
     assert chat_model.stream_chunk_timeout == 8
     assert chat_model.max_retries == 0
-    assert memory_model.extra_body == {"enable_thinking": False}
-    assert memory_model.max_tokens == 256
+    assert memory_model.extra_body == {"enable_thinking": False, "max_tokens": 256}
+    assert memory_model.max_tokens is None
+
+
+@pytest.mark.asyncio
+async def test_chat_model_sends_siliconflow_compatible_token_field() -> None:
+    captured: dict = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        stream = (
+            'data: {"id":"test","object":"chat.completion.chunk",'
+            '"created":1,"model":"Qwen/Qwen3.5-35B-A3B",'
+            '"choices":[{"index":0,"delta":{"content":"好"},'
+            '"finish_reason":null}]}\n\n'
+            "data: [DONE]\n\n"
+        )
+        return httpx.Response(
+            200,
+            text=stream,
+            headers={"content-type": "text/event-stream"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        model = build_chat_model(
+            Settings(
+                _env_file=None,
+                openai_api_key="test-key",
+                openai_base_url="https://api.siliconflow.cn/v1",
+                chat_model="Qwen/Qwen3.5-35B-A3B",
+            ),
+            http_async_client=client,
+        )
+        chunks = [chunk async for chunk in model.astream("今天有点累")]
+
+    assert "".join(str(chunk.content) for chunk in chunks) == "好"
+    assert captured["max_tokens"] == 320
+    assert captured["enable_thinking"] is False
+    assert "max_completion_tokens" not in captured

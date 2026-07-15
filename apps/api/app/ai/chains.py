@@ -1,3 +1,4 @@
+import httpx
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -8,7 +9,11 @@ from app.ai.prompts import COMPANION_SYSTEM_PROMPT
 from app.config import Settings, get_settings
 
 
-def build_chat_model(settings: Settings | None = None) -> ChatOpenAI:
+def build_chat_model(
+    settings: Settings | None = None,
+    *,
+    http_async_client: httpx.AsyncClient | None = None,
+) -> ChatOpenAI:
     current = settings or get_settings()
     if not current.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required")
@@ -16,12 +21,12 @@ def build_chat_model(settings: Settings | None = None) -> ChatOpenAI:
         model=current.chat_model,
         api_key=current.openai_api_key,
         base_url=current.openai_base_url,
-        extra_body={"enable_thinking": False},
-        max_tokens=320,
+        extra_body={"enable_thinking": False, "max_tokens": 320},
         streaming=True,
         stream_chunk_timeout=8,
         timeout=20,
         max_retries=0,
+        http_async_client=http_async_client,
     )
 
 
@@ -33,8 +38,7 @@ def build_memory_model(settings: Settings | None = None) -> ChatOpenAI:
         model=current.memory_model,
         api_key=current.openai_api_key,
         base_url=current.openai_base_url,
-        extra_body={"enable_thinking": False},
-        max_tokens=256,
+        extra_body={"enable_thinking": False, "max_tokens": 256},
         timeout=15,
         max_retries=2,
     )

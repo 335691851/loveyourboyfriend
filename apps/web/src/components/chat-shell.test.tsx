@@ -14,6 +14,7 @@ describe("ChatShell", () => {
     expect(
       screen.getByRole("button", { name: "发送语音" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("陆川")).toBeInTheDocument();
   });
 
   it("does not render a server-generated timestamp for the synthetic greeting", () => {

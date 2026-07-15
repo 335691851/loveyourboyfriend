@@ -7,6 +7,7 @@ from uuid import UUID
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import Runnable
 
+from app.ai.fallback import build_fallback_reply
 from app.models import AuthenticatedUser, ChatRequest, MemoryExtraction
 from app.repositories.chat import ChatRepository
 
@@ -27,16 +28,6 @@ class ChatService:
     @staticmethod
     def _event(event_type: str, **payload: Any) -> str:
         return json.dumps({"type": event_type, **payload}, ensure_ascii=False) + "\n"
-
-    @staticmethod
-    def _fallback_reply(user_text: str) -> str:
-        if any(word in user_text for word in ("累", "疲惫", "辛苦")):
-            return "累了就先靠我这儿一会儿，今天不用一直逞强。"
-        if any(word in user_text for word in ("吃", "饿", "晚饭", "夜宵")):
-            return "先别委屈自己的胃，告诉我你现在最想吃的那一口。"
-        if any(word in user_text for word in ("难过", "不开心", "委屈", "想哭")):
-            return "不用急着把情绪收好，我在这儿，慢慢说给我听。"
-        return "我在，慢慢说，不用先把情绪整理得很漂亮。"
 
     async def _save_memory(
         self,
@@ -71,7 +62,7 @@ class ChatService:
             conversation = await self.repository.create_conversation()
             conversation_id = UUID(conversation["id"])
 
-        history_rows = await self.repository.list_messages(conversation_id)
+        history_rows = await self.repository.list_messages(conversation_id, limit=7)
         memories = await self.repository.list_memories()
         user_message = await self.repository.create_message(
             conversation_id=conversation_id,
@@ -112,7 +103,7 @@ class ChatService:
                 type(error).__name__,
             )
             if not chunks:
-                fallback = self._fallback_reply(request.content)
+                fallback = build_fallback_reply(request.content, history_rows)
                 chunks.append(fallback)
                 yield self._event("delta", content=fallback)
 

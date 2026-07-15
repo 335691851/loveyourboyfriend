@@ -43,7 +43,7 @@ pnpm format:check  # 格式检查
 
 ## LangChain 模块
 
-- `app/ai/prompts.py`：陆屿角色、安全边界和记忆提取规则
+- `app/ai/prompts.py`：陆川角色、安全边界和记忆提取规则
 - `app/ai/chains.py`：`ChatPromptTemplate → ChatOpenAI → StrOutputParser` 流式链
 - `app/ai/memory.py`：Structured Output 记忆提取、置信度过滤和去重
 - `app/services/chat.py`：把身份、历史、记忆、流式回复和持久化编排为一次对话

@@ -52,7 +52,7 @@ function MessageBubble({
               <i />
             </span>
             <span>
-              {message.role === "user" ? "语音已转写" : "陆屿的语音"}
+              {message.role === "user" ? "语音已转写" : "陆川的语音"}
               {message.durationMs
                 ? ` · ${Math.ceil(message.durationMs / 1000)}″`
                 : ""}
@@ -124,12 +124,12 @@ export function ChatShell() {
           </button>
           <div className="character">
             <div className="avatar" aria-hidden="true">
-              <span>屿</span>
+              <span>川</span>
               <i />
             </div>
             <div>
               <div className="character-name">
-                <strong>陆屿</strong>
+                <strong>陆川</strong>
                 <span>AI</span>
               </div>
               <p>
@@ -199,13 +199,13 @@ export function ChatShell() {
           ))}
           {(chat.sending || chat.transcribing) && (
             <div className="activity-row">
-              <div className="typing" aria-label="陆屿正在输入">
+              <div className="typing" aria-label="陆川正在输入">
                 <span />
                 <span />
                 <span />
               </div>
               <small>
-                {chat.transcribing ? "正在听懂你的语音" : "陆屿正在回应"}
+                {chat.transcribing ? "正在听懂你的语音" : "陆川正在回应"}
               </small>
             </div>
           )}
@@ -274,14 +274,14 @@ export function ChatShell() {
               className="info-sheet"
               role="dialog"
               aria-modal="true"
-              aria-label="关于陆屿"
+              aria-label="关于陆川"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="sheet-handle" />
               <span className="eyebrow">ABOUT LU YU</span>
               <h2>温柔，也有边界</h2>
               <p>
-                陆屿是虚构的 AI
+                陆川是虚构的 AI
                 角色，不是真实的人。他会记住你明确分享的偏好，让聊天更连贯，但不会要求你依赖或只选择他。
               </p>
               <div className="trust-grid">
