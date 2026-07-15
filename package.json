@@ -8,7 +8,7 @@
     "dev:api": "uv run --project apps/api uvicorn app.main:app --reload --port 8000",
     "test": "pnpm test:web && pnpm test:api",
     "test:web": "pnpm --filter web test",
-    "test:api": "uv run --project apps/api pytest apps/api/tests -q",
+    "test:api": "uv run --project apps/api pytest -c apps/api/pyproject.toml apps/api/tests -q",
     "lint": "pnpm lint:web && pnpm lint:api",
     "lint:web": "pnpm --filter web lint && pnpm --filter web typecheck",
     "lint:api": "uv run --project apps/api ruff format --check apps/api && uv run --project apps/api ruff check apps/api",

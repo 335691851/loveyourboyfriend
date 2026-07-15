@@ -9,7 +9,7 @@ Build a mobile-first responsive H5 chat application for an adult fictional male 
 - `apps/web`: Next.js App Router, React, TypeScript and Tailwind CSS. Vercel watches `master` and deploys this directory.
 - `apps/api`: Python 3.12, FastAPI and LangChain. Render watches `master` and deploys this directory.
 - Supabase: anonymous authentication, PostgreSQL, private voice-message storage, RLS and scheduled 90-day cleanup.
-- OpenAI: text generation through the configured chat model and low-latency voice through the configured realtime model.
+- SiliconFlow: Qwen text generation, SenseVoice transcription and CosyVoice speech through OpenAI-compatible endpoints.
 - GitHub: one production branch named `master`; Vercel and Render deploy independently from the same repository.
 
 ## First scaffold milestone
@@ -19,7 +19,7 @@ The initial repository must be safe to import into Vercel and Render without pro
 ## Data and security boundaries
 
 - The browser receives only Supabase URL, publishable key and public application configuration.
-- OpenAI keys, Supabase secret keys and the database connection string stay in Render.
+- Model API keys, Supabase secret keys and the database connection string stay in Render.
 - Every exposed application table uses RLS with `auth.uid() = user_id` ownership checks.
 - Anonymous users cannot recover their identity after clearing browser storage or changing device.
 - Raw messages, voice objects and derived memory expire after 90 days.

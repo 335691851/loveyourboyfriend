@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.routes.chat import router as chat_router
+from app.routes.voice import router as voice_router
 
 settings = get_settings()
 
@@ -15,9 +17,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+app.include_router(chat_router)
+app.include_router(voice_router)
 
 
 @app.get("/health", tags=["system"])

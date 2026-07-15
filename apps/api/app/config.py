@@ -15,8 +15,13 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000"
 
     openai_api_key: str | None = None
-    chat_model: str = "gpt-5.6-terra"
-    voice_model: str = "gpt-realtime-2.1-mini"
+    openai_base_url: str = "https://api.siliconflow.cn/v1"
+    chat_model: str = "Qwen/Qwen3.5-35B-A3B"
+    memory_model: str = "Qwen/Qwen3.5-9B"
+    transcription_model: str = "FunAudioLLM/SenseVoiceSmall"
+    speech_model: str = "FunAudioLLM/CosyVoice2-0.5B"
+    speech_voice: str = "FunAudioLLM/CosyVoice2-0.5B:david"
+    max_audio_bytes: int = 10_000_000
 
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None

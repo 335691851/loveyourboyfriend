@@ -24,7 +24,7 @@
 环境变量参考 `apps/api/.env.example`。以下机密只填写在 Render Dashboard，不要提交到 Git：
 
 ```text
-OPENAI_API_KEY
+OPENAI_API_KEY（填写 SiliconFlow API Key）
 SUPABASE_SECRET_KEY
 DATABASE_URL
 TURNSTILE_SECRET_KEY
@@ -41,6 +41,9 @@ TURNSTILE_SECRET_KEY
 3. 审阅 `supabase/migrations/`，连接正式项目后先执行 dry-run，再应用 migration。
 4. 前端只使用 Publishable Key；Secret Key 和数据库密码只能放在 Render。
 
-当前 migration 已为业务表启用 RLS，并按 `auth.uid()` 隔离匿名用户数据。本地初始化不会自动修改线上数据库。
-
-语音 Storage、Turnstile 和 90 天自动清理任务将在对应功能开发时添加。
+当前 migration 已为业务表启用 RLS，并按 `auth.uid()` 隔离匿名用户数据。
+`pg_cron` 每日清理到期的消息、记忆和会话，活跃会话在每次新消息后续期 90 天。
+语音原文件进入私有 `voice-messages` bucket；`render.yaml` 中的
+`loveyourboyfriend-voice-cleanup` Cron Service 每天通过 Storage API 删除超过 90 天的对象。
+创建该 Cron Service 时只需同步 `SUPABASE_SECRET_KEY`，无需模型 API Key。
+本地初始化不会自动修改线上数据库。

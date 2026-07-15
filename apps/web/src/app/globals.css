@@ -34,6 +34,11 @@ button {
   color: inherit;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .app-stage {
   min-height: 100svh;
   display: grid;
@@ -85,6 +90,9 @@ button {
   top: 16%;
   right: -110px;
   background: rgba(132, 37, 83, 0.28);
+  transition:
+    background 0.6s ease,
+    transform 0.6s ease;
 }
 
 .ambient-two {
@@ -94,6 +102,15 @@ button {
   bottom: 22%;
   background: rgba(98, 73, 155, 0.2);
   animation-delay: -4s;
+}
+
+.phone-shell.state-listening .ambient-one {
+  background: rgba(224, 69, 126, 0.36);
+  transform: scale(1.14);
+}
+
+.phone-shell.state-responding .ambient-two {
+  background: rgba(124, 87, 205, 0.3);
 }
 
 .grain {
@@ -339,9 +356,47 @@ button {
   margin: 0;
 }
 
+.mood-prompts {
+  display: flex;
+  gap: 8px;
+  padding: 14px 2px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mood-prompts button {
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border: 1px solid rgba(233, 122, 165, 0.15);
+  border-radius: 999px;
+  color: #cfb9c8;
+  background: rgba(129, 49, 86, 0.12);
+  font-size: 11px;
+}
+
 .message-agent {
   display: flex;
   justify-content: flex-start;
+}
+
+.message-assistant {
+  display: flex;
+  justify-content: flex-start;
+  margin: 9px 0;
+  animation: message-in 0.32s ease-out both;
+}
+
+.message-user {
+  display: flex;
+  justify-content: flex-end;
+  margin: 9px 0;
+  animation: message-in 0.32s ease-out both;
+}
+
+.message-user .bubble {
+  border-color: rgba(255, 190, 215, 0.13);
+  border-radius: 20px 7px 20px 20px;
+  background: linear-gradient(145deg, #8d365f, #592846);
 }
 
 .bubble {
@@ -364,11 +419,70 @@ button {
 }
 
 .bubble time {
-  display: block;
-  margin-top: 6px;
   color: #857480;
   font-size: 9px;
-  text-align: right;
+}
+
+.message-user .bubble time {
+  color: rgba(255, 236, 244, 0.56);
+}
+
+.bubble-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-height: 15px;
+  margin-top: 6px;
+}
+
+.bubble-meta button {
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  color: #dba6bc;
+  background: transparent;
+}
+
+.bubble-meta svg {
+  width: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.voice-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: #deb2c4;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.mini-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 11px;
+}
+
+.mini-wave i {
+  width: 2px;
+  height: 5px;
+  border-radius: 9px;
+  background: currentColor;
+}
+
+.mini-wave i:nth-child(2) {
+  height: 10px;
+}
+.mini-wave i:nth-child(3) {
+  height: 7px;
 }
 
 .typing {
@@ -394,6 +508,28 @@ button {
 }
 .typing span:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8f7b89;
+}
+
+.activity-row small {
+  font-size: 9px;
+}
+
+.error-toast {
+  margin: 16px auto 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 157, 184, 0.16);
+  border-radius: 12px;
+  color: #e9bdca;
+  background: rgba(116, 34, 64, 0.18);
+  font-size: 11px;
+  text-align: center;
 }
 
 .composer-wrap {
@@ -436,6 +572,13 @@ button {
   background: rgba(255, 255, 255, 0.045);
 }
 
+.voice-button.is-recording {
+  color: white;
+  background: linear-gradient(145deg, #d95083, #8b2f57);
+  box-shadow: 0 0 0 7px rgba(217, 80, 131, 0.1);
+  animation: record-pulse 1.4s ease-in-out infinite;
+}
+
 .send-button {
   color: #fff6fa;
   background: linear-gradient(145deg, #a43f6b, #6e2d57);
@@ -462,6 +605,100 @@ button {
   font-size: 8px;
   text-align: center;
   letter-spacing: 0.05em;
+}
+
+.recording-strip,
+.recorder-error {
+  margin: 0 0 9px;
+  font-size: 10px;
+  text-align: center;
+}
+
+.recording-strip {
+  color: #e7b3c8;
+}
+
+.recording-strip span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #ef6c9c;
+  box-shadow: 0 0 10px #ef6c9c;
+}
+
+.recorder-error {
+  color: #e3a8bb;
+}
+
+.sheet-backdrop {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(3, 2, 5, 0.64);
+  backdrop-filter: blur(6px);
+  animation: fade-in 0.2s ease-out;
+}
+
+.info-sheet {
+  width: 100%;
+  padding: 12px 24px calc(28px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 30px 30px 0 0;
+  background: linear-gradient(160deg, #281724, #100b13 72%);
+  box-shadow: 0 -30px 80px rgba(0, 0, 0, 0.4);
+  animation: sheet-up 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sheet-handle {
+  width: 38px;
+  height: 4px;
+  margin: 0 auto 28px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.info-sheet h2 {
+  margin: 10px 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.info-sheet p {
+  margin: 0;
+  color: #bca9b8;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin: 20px 0;
+}
+
+.trust-grid span {
+  padding: 9px 4px;
+  border: 1px solid rgba(233, 122, 165, 0.11);
+  border-radius: 11px;
+  color: #cdaebe;
+  background: rgba(233, 122, 165, 0.05);
+  font-size: 9px;
+  text-align: center;
+}
+
+.info-sheet > button {
+  width: 100%;
+  padding: 13px;
+  border: 0;
+  border-radius: 15px;
+  color: white;
+  background: linear-gradient(145deg, #a43f6b, #6e2d57);
 }
 
 .sr-only {
@@ -507,6 +744,31 @@ button {
   40% {
     opacity: 1;
     transform: translateY(-3px);
+  }
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.98);
+  }
+}
+
+@keyframes record-pulse {
+  50% {
+    transform: scale(0.94);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
   }
 }
 

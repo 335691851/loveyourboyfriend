@@ -1,11 +1,12 @@
 # Love Your Boyfriend
 
-移动端优先的沉浸式虚拟陪伴 H5。当前仓库是可运行、可测试、可部署的 MVP 骨架，聊天、语音、匿名身份和长期记忆将在后续功能开发中接入。
+移动端优先的沉浸式虚拟陪伴 H5。当前 MVP 已包含匿名登录、流式对话、
+长期记忆、私有语音收发、历史恢复和 90 天数据清理。
 
 ## 技术栈
 
 - `apps/web`：Next.js 16、React 19、TypeScript、Tailwind CSS
-- `apps/api`：Python 3.12、FastAPI、LangChain
+- `apps/api`：Python 3.12、FastAPI、LangChain、SiliconFlow OpenAI 兼容 API
 - `supabase`：匿名认证、PostgreSQL、数据库 migrations
 - 部署：Vercel 前端 + Render 后端，监听 `master` 自动发布
 
@@ -39,3 +40,13 @@ pnpm format:check  # 格式检查
 ```
 
 部署平台初始化和环境变量说明见 [docs/deployment.md](docs/deployment.md)。密钥只写入本地或平台环境变量，不要提交到 Git。
+
+## LangChain 模块
+
+- `app/ai/prompts.py`：陆屿角色、安全边界和记忆提取规则
+- `app/ai/chains.py`：`ChatPromptTemplate → ChatOpenAI → StrOutputParser` 流式链
+- `app/ai/memory.py`：Structured Output 记忆提取、置信度过滤和去重
+- `app/services/chat.py`：把身份、历史、记忆、流式回复和持久化编排为一次对话
+
+文字和语音共用同一套角色与记忆。语音采用“SenseVoice 转写 → Qwen 对话链 →
+CosyVoice 男声合成”，便于首版稳定上线。

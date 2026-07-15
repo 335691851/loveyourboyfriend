@@ -33,3 +33,16 @@ def test_database_hardening_revokes_public_function_and_indexes_memory_source() 
 
     assert "revoke all on function public.rls_auto_enable()" in sql
     assert "on public.memories (source_message_id)" in sql
+
+
+def test_retention_cleanup_is_scheduled_and_extends_active_conversations() -> None:
+    migrations_dir = MIGRATION.parent
+    sql = "\n".join(
+        path.read_text(encoding="utf-8").lower() for path in sorted(migrations_dir.glob("*.sql"))
+    )
+
+    assert "private.delete_expired_chat_data" in sql
+    assert "cron.schedule" in sql
+    assert "new.expires_at := now() + interval '90 days'" in sql
+    assert "'voice-messages'" in sql
+    assert "(storage.foldername(name))[1] = (select auth.uid())::text" in sql

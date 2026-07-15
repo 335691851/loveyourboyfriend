@@ -16,10 +16,18 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_BASE_URL
+        value: https://api.siliconflow.cn/v1
       - key: CHAT_MODEL
-        value: gpt-5.6-terra
-      - key: VOICE_MODEL
-        value: gpt-realtime-2.1-mini
+        value: Qwen/Qwen3.5-35B-A3B
+      - key: MEMORY_MODEL
+        value: Qwen/Qwen3.5-9B
+      - key: TRANSCRIPTION_MODEL
+        value: FunAudioLLM/SenseVoiceSmall
+      - key: SPEECH_MODEL
+        value: FunAudioLLM/CosyVoice2-0.5B
+      - key: SPEECH_VOICE
+        value: FunAudioLLM/CosyVoice2-0.5B:david
       - key: SUPABASE_URL
         value: https://rycwnxynvlfqkfgsksrs.supabase.co
       - key: SUPABASE_PUBLISHABLE_KEY
@@ -29,6 +37,22 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: DATA_RETENTION_DAYS
+        value: "90"
+  - type: cron
+    name: loveyourboyfriend-voice-cleanup
+    runtime: python
+    plan: starter
+    branch: master
+    rootDir: apps/api
+    schedule: "17 3 * * *"
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: uv run --no-sync python -m app.jobs.cleanup_voice
+    envVars:
+      - key: SUPABASE_URL
+        value: https://rycwnxynvlfqkfgsksrs.supabase.co
+      - key: SUPABASE_SECRET_KEY
         sync: false
       - key: DATA_RETENTION_DAYS
         value: "90"
