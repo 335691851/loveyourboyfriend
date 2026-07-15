@@ -1,6 +1,6 @@
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
-from app.ai.chains import build_chat_chain, build_chat_model
+from app.ai.chains import build_chat_chain, build_chat_model, build_memory_model
 from app.config import Settings
 
 
@@ -31,3 +31,21 @@ def test_chat_model_uses_configured_openai_compatible_endpoint() -> None:
 
     assert model.openai_api_base == "https://api.siliconflow.cn/v1"
     assert model.model_name == "Qwen/Qwen3.5-35B-A3B"
+
+
+def test_siliconflow_models_disable_thinking_for_low_latency_output() -> None:
+    settings = Settings(
+        _env_file=None,
+        openai_api_key="test-key",
+        openai_base_url="https://api.siliconflow.cn/v1",
+        chat_model="Qwen/Qwen3.5-35B-A3B",
+        memory_model="Qwen/Qwen3.5-9B",
+    )
+
+    chat_model = build_chat_model(settings)
+    memory_model = build_memory_model(settings)
+
+    assert chat_model.extra_body == {"enable_thinking": False}
+    assert chat_model.max_tokens == 320
+    assert memory_model.extra_body == {"enable_thinking": False}
+    assert memory_model.max_tokens == 256

@@ -16,6 +16,8 @@ def build_chat_model(settings: Settings | None = None) -> ChatOpenAI:
         model=current.chat_model,
         api_key=current.openai_api_key,
         base_url=current.openai_base_url,
+        extra_body={"enable_thinking": False},
+        max_tokens=320,
         streaming=True,
         timeout=20,
         max_retries=2,
@@ -30,6 +32,8 @@ def build_memory_model(settings: Settings | None = None) -> ChatOpenAI:
         model=current.memory_model,
         api_key=current.openai_api_key,
         base_url=current.openai_base_url,
+        extra_body={"enable_thinking": False},
+        max_tokens=256,
         timeout=15,
         max_retries=2,
     )
