@@ -37,6 +37,31 @@ def test_chat_model_uses_configured_openai_compatible_endpoint() -> None:
     assert model.model_name == "Qwen/Qwen3.5-35B-A3B"
 
 
+def test_siliconflow_replaces_an_incompatible_openai_model_name() -> None:
+    settings = Settings(
+        _env_file=None,
+        openai_api_key="test-key",
+        openai_base_url="https://api.siliconflow.cn/v1",
+        chat_model="gpt-5.6-terra",
+    )
+
+    model = build_chat_model(settings)
+
+    assert settings.effective_chat_model == "Qwen/Qwen3.5-35B-A3B"
+    assert model.model_name == "Qwen/Qwen3.5-35B-A3B"
+
+
+def test_non_siliconflow_provider_keeps_its_configured_model_name() -> None:
+    settings = Settings(
+        _env_file=None,
+        openai_api_key="test-key",
+        openai_base_url="https://api.openai.com/v1",
+        chat_model="gpt-5.6-terra",
+    )
+
+    assert settings.effective_chat_model == "gpt-5.6-terra"
+
+
 def test_siliconflow_models_disable_thinking_for_low_latency_output() -> None:
     settings = Settings(
         _env_file=None,

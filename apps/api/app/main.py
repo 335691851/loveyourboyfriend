@@ -33,5 +33,5 @@ async def health() -> dict[str, str]:
         "service": "loveyourboyfriend-api",
         "revision": settings.render_git_commit[:7],
         "chat_provider": urlparse(settings.openai_base_url).hostname or "unknown",
-        "chat_model": settings.chat_model,
+        "chat_model": settings.effective_chat_model,
     }

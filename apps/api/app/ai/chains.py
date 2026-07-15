@@ -18,7 +18,7 @@ def build_chat_model(
     if not current.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required")
     return ChatOpenAI(
-        model=current.chat_model,
+        model=current.effective_chat_model,
         api_key=current.openai_api_key,
         base_url=current.openai_base_url,
         extra_body={"enable_thinking": False, "max_tokens": 320},
@@ -35,7 +35,7 @@ def build_memory_model(settings: Settings | None = None) -> ChatOpenAI:
     if not current.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required")
     return ChatOpenAI(
-        model=current.memory_model,
+        model=current.effective_memory_model,
         api_key=current.openai_api_key,
         base_url=current.openai_base_url,
         extra_body={"enable_thinking": False, "max_tokens": 256},
