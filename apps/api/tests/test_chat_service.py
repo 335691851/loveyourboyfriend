@@ -48,6 +48,13 @@ class FakeChain:
             yield token
 
 
+class UnavailableChain:
+    async def astream(self, input_: dict):
+        if False:
+            yield ""
+        raise TimeoutError("provider did not produce a stream chunk")
+
+
 @pytest.mark.asyncio
 async def test_chat_service_streams_and_persists_both_messages() -> None:
     repository = FakeRepository()
@@ -67,3 +74,36 @@ async def test_chat_service_streams_and_persists_both_messages() -> None:
     assert repository.saved[1]["role"] == "assistant"
     assert isinstance(chain.input["history"][-1], AIMessage)
     assert "喜欢夜跑" in chain.input["memories"]
+
+
+@pytest.mark.asyncio
+async def test_chat_service_persists_a_friendly_fallback_when_provider_fails() -> None:
+    repository = FakeRepository()
+    service = ChatService(
+        repository=repository,
+        chain=UnavailableChain(),
+        memory_extractor=None,
+    )
+    user = AuthenticatedUser(
+        id="20419c0a-140c-4b21-a633-a90285432d02",
+        access_token="token",
+    )
+
+    lines = [
+        line
+        async for line in service.stream(
+            user,
+            ChatRequest(content="今天真的有点累"),
+        )
+    ]
+    events = [json.loads(line) for line in lines]
+
+    assert [event["type"] for event in events] == [
+        "start",
+        "delta",
+        "message",
+        "done",
+    ]
+    assert "累" in events[1]["content"]
+    assert repository.saved[-1]["role"] == "assistant"
+    assert repository.saved[-1]["content"] == events[1]["content"]

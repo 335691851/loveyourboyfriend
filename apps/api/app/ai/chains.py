@@ -19,8 +19,9 @@ def build_chat_model(settings: Settings | None = None) -> ChatOpenAI:
         extra_body={"enable_thinking": False},
         max_tokens=320,
         streaming=True,
+        stream_chunk_timeout=8,
         timeout=20,
-        max_retries=2,
+        max_retries=0,
     )
 
 

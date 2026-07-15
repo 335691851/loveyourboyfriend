@@ -47,5 +47,7 @@ def test_siliconflow_models_disable_thinking_for_low_latency_output() -> None:
 
     assert chat_model.extra_body == {"enable_thinking": False}
     assert chat_model.max_tokens == 320
+    assert chat_model.stream_chunk_timeout == 8
+    assert chat_model.max_retries == 0
     assert memory_model.extra_body == {"enable_thinking": False}
     assert memory_model.max_tokens == 256

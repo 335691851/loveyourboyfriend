@@ -28,6 +28,16 @@ class ChatService:
     def _event(event_type: str, **payload: Any) -> str:
         return json.dumps({"type": event_type, **payload}, ensure_ascii=False) + "\n"
 
+    @staticmethod
+    def _fallback_reply(user_text: str) -> str:
+        if any(word in user_text for word in ("累", "疲惫", "辛苦")):
+            return "累了就先靠我这儿一会儿，今天不用一直逞强。"
+        if any(word in user_text for word in ("吃", "饿", "晚饭", "夜宵")):
+            return "先别委屈自己的胃，告诉我你现在最想吃的那一口。"
+        if any(word in user_text for word in ("难过", "不开心", "委屈", "想哭")):
+            return "不用急着把情绪收好，我在这儿，慢慢说给我听。"
+        return "我在，慢慢说，不用先把情绪整理得很漂亮。"
+
     async def _save_memory(
         self,
         user_text: str,
@@ -83,16 +93,26 @@ class ChatService:
 
         yield self._event("start", conversation_id=str(conversation_id))
         chunks: list[str] = []
-        async for chunk in self.chain.astream(
-            {
-                "history": history,
-                "memories": memory_text,
-                "user_input": request.content,
-            }
-        ):
-            if chunk:
-                chunks.append(chunk)
-                yield self._event("delta", content=chunk)
+        try:
+            async for chunk in self.chain.astream(
+                {
+                    "history": history,
+                    "memories": memory_text,
+                    "user_input": request.content,
+                }
+            ):
+                if chunk:
+                    chunks.append(chunk)
+                    yield self._event("delta", content=chunk)
+        except Exception as error:
+            logger.warning(
+                "Chat provider failed; serving local fallback (%s)",
+                type(error).__name__,
+            )
+            if not chunks:
+                fallback = self._fallback_reply(request.content)
+                chunks.append(fallback)
+                yield self._event("delta", content=fallback)
 
         assistant_text = "".join(chunks).strip()
         assistant_message = await self.repository.create_message(
