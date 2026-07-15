@@ -14,6 +14,23 @@ from app.repositories.chat import ChatRepository
 logger = logging.getLogger(__name__)
 
 
+def _safe_provider_error_field(value: Any, *, limit: int = 300) -> str:
+    if value is None:
+        return "unknown"
+    return " ".join(str(value).split())[:limit] or "unknown"
+
+
+def _provider_error_details(error: Exception) -> tuple[str, str, str, str]:
+    body = getattr(error, "body", None)
+    safe_body = body if isinstance(body, dict) else {}
+    return (
+        _safe_provider_error_field(getattr(error, "status_code", None)),
+        _safe_provider_error_field(safe_body.get("code")),
+        _safe_provider_error_field(safe_body.get("message")),
+        _safe_provider_error_field(getattr(error, "request_id", None)),
+    )
+
+
 class ChatService:
     def __init__(
         self,
@@ -98,9 +115,15 @@ class ChatService:
                     yield self._event("delta", content=chunk)
         except Exception as error:
             provider_failed = True
+            status_code, error_code, error_message, request_id = _provider_error_details(error)
             logger.warning(
-                "Chat provider failed; serving local fallback (%s)",
+                "Chat provider failed; serving local fallback "
+                "(type=%s status=%s code=%s message=%s request_id=%s)",
                 type(error).__name__,
+                status_code,
+                error_code,
+                error_message,
+                request_id,
             )
             if not chunks:
                 fallback = build_fallback_reply(request.content, history_rows)

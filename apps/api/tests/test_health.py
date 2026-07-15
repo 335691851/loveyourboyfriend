@@ -9,4 +9,6 @@ def test_health_returns_service_status(client: TestClient) -> None:
         "status": "ok",
         "service": "loveyourboyfriend-api",
         "revision": "local",
+        "chat_provider": "api.siliconflow.cn",
+        "chat_model": "Qwen/Qwen3.5-35B-A3B",
     }

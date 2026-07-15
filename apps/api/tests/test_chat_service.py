@@ -1,4 +1,5 @@
 import json
+import logging
 from uuid import UUID
 
 import pytest
@@ -55,6 +56,22 @@ class UnavailableChain:
         if False:
             yield ""
         raise TimeoutError("provider did not produce a stream chunk")
+
+
+class ProviderBadRequestChain:
+    async def astream(self, input_: dict):
+        if False:
+            yield ""
+        error = RuntimeError("raw exception text must not be logged")
+        error.status_code = 400
+        error.request_id = "request-123"
+        error.body = {
+            "code": "invalid_model",
+            "message": "The configured model is unavailable",
+            "type": "invalid_request_error",
+            "ignored": "sensitive provider detail",
+        }
+        raise error
 
 
 class FakeMemoryExtractor:
@@ -121,3 +138,36 @@ async def test_chat_service_persists_a_friendly_fallback_when_provider_fails() -
     assert repository.saved[-1]["role"] == "assistant"
     assert repository.saved[-1]["content"] == events[1]["content"]
     assert memory_extractor.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_chat_service_logs_safe_provider_error_details(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    repository = FakeRepository()
+    service = ChatService(
+        repository=repository,
+        chain=ProviderBadRequestChain(),
+        memory_extractor=None,
+    )
+    user = AuthenticatedUser(
+        id="20419c0a-140c-4b21-a633-a90285432d02",
+        access_token="token",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.services.chat"):
+        _ = [
+            line
+            async for line in service.stream(
+                user,
+                ChatRequest(content="今天想聊聊"),
+            )
+        ]
+
+    message = caplog.messages[-1]
+    assert "status=400" in message
+    assert "code=invalid_model" in message
+    assert "message=The configured model is unavailable" in message
+    assert "request_id=request-123" in message
+    assert "raw exception text" not in message
+    assert "sensitive provider detail" not in message

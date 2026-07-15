@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,4 +32,6 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "service": "loveyourboyfriend-api",
         "revision": settings.render_git_commit[:7],
+        "chat_provider": urlparse(settings.openai_base_url).hostname or "unknown",
+        "chat_model": settings.chat_model,
     }
