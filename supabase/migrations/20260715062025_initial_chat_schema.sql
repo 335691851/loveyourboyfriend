@@ -106,8 +106,24 @@ create policy messages_owner_all
 on public.messages
 for all
 to authenticated
-using ((select auth.uid()) = user_id)
-with check ((select auth.uid()) = user_id);
+using (
+  (select auth.uid()) = user_id
+  and exists (
+    select 1
+    from public.conversations as conversation
+    where conversation.id = conversation_id
+      and conversation.user_id = (select auth.uid())
+  )
+)
+with check (
+  (select auth.uid()) = user_id
+  and exists (
+    select 1
+    from public.conversations as conversation
+    where conversation.id = conversation_id
+      and conversation.user_id = (select auth.uid())
+  )
+);
 
 create policy memories_owner_all
 on public.memories
