@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+CANONICAL_WEB_ORIGINS = ("https://loveyourboyfriend.daidai634.com",)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -32,7 +34,10 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        configured = [
+            origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()
+        ]
+        return list(dict.fromkeys([*configured, *CANONICAL_WEB_ORIGINS]))
 
 
 @lru_cache

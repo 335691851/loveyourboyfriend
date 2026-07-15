@@ -14,3 +14,13 @@ def test_settings_have_safe_non_secret_defaults() -> None:
     assert settings.data_retention_days == 90
     assert settings.openai_api_key is None
     assert settings.supabase_secret_key is None
+
+
+def test_cors_origins_always_include_the_canonical_production_site() -> None:
+    settings = Settings(
+        _env_file=None,
+        allowed_origins="https://old-preview.vercel.app",
+    )
+
+    assert "https://old-preview.vercel.app" in settings.cors_origins
+    assert "https://loveyourboyfriend.daidai634.com" in settings.cors_origins
