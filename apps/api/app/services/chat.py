@@ -93,6 +93,7 @@ class ChatService:
 
         yield self._event("start", conversation_id=str(conversation_id))
         chunks: list[str] = []
+        provider_failed = False
         try:
             async for chunk in self.chain.astream(
                 {
@@ -105,6 +106,7 @@ class ChatService:
                     chunks.append(chunk)
                     yield self._event("delta", content=chunk)
         except Exception as error:
+            provider_failed = True
             logger.warning(
                 "Chat provider failed; serving local fallback (%s)",
                 type(error).__name__,
@@ -129,6 +131,6 @@ class ChatService:
             content=assistant_text,
             message_type=request.response_mode,
         )
-        if self.memory_extractor is not None:
+        if self.memory_extractor is not None and not provider_failed:
             await self._save_memory(request.content, assistant_text, user_message["id"])
         yield self._event("done")

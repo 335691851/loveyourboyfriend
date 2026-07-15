@@ -55,6 +55,15 @@ class UnavailableChain:
         raise TimeoutError("provider did not produce a stream chunk")
 
 
+class FakeMemoryExtractor:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def ainvoke(self, input_: dict):
+        self.calls += 1
+        return {"memories": []}
+
+
 @pytest.mark.asyncio
 async def test_chat_service_streams_and_persists_both_messages() -> None:
     repository = FakeRepository()
@@ -79,10 +88,11 @@ async def test_chat_service_streams_and_persists_both_messages() -> None:
 @pytest.mark.asyncio
 async def test_chat_service_persists_a_friendly_fallback_when_provider_fails() -> None:
     repository = FakeRepository()
+    memory_extractor = FakeMemoryExtractor()
     service = ChatService(
         repository=repository,
         chain=UnavailableChain(),
-        memory_extractor=None,
+        memory_extractor=memory_extractor,
     )
     user = AuthenticatedUser(
         id="20419c0a-140c-4b21-a633-a90285432d02",
@@ -107,3 +117,4 @@ async def test_chat_service_persists_a_friendly_fallback_when_provider_fails() -
     assert "累" in events[1]["content"]
     assert repository.saved[-1]["role"] == "assistant"
     assert repository.saved[-1]["content"] == events[1]["content"]
+    assert memory_extractor.calls == 0
