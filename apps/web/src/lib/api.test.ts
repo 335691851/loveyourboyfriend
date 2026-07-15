@@ -7,7 +7,11 @@ describe("consumeNdjson", () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('{"type":"delta","content":"晚'));
+        controller.enqueue(
+          encoder.encode(
+            '{"type":"companion_state","state":"soft","emoji":"🤍","label":"有点心软了"}\n{"type":"delta","index":0,"content":"晚',
+          ),
+        );
         controller.enqueue(encoder.encode('安"}\n{"type":"done"}\n'));
         controller.close();
       },
@@ -17,9 +21,16 @@ describe("consumeNdjson", () => {
     await consumeNdjson(stream, onEvent);
 
     expect(onEvent).toHaveBeenNthCalledWith(1, {
+      type: "companion_state",
+      state: "soft",
+      emoji: "🤍",
+      label: "有点心软了",
+    });
+    expect(onEvent).toHaveBeenNthCalledWith(2, {
       type: "delta",
+      index: 0,
       content: "晚安",
     });
-    expect(onEvent).toHaveBeenNthCalledWith(2, { type: "done" });
+    expect(onEvent).toHaveBeenNthCalledWith(3, { type: "done" });
   });
 });

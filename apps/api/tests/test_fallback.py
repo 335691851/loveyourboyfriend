@@ -1,39 +1,44 @@
-from app.ai.fallback import build_fallback_reply
+from app.ai.fallback import REPLIES, build_fallback_reply
+
+
+def text(reply: object) -> str:
+    return "\n".join(reply.bubbles)  # type: ignore[attr-defined]
 
 
 def test_fallback_answers_presence_without_claiming_a_physical_location() -> None:
     reply = build_fallback_reply("你在哪里呀", [])
 
-    assert "在" in reply
-    assert all(word not in reply for word in ("家里", "公司", "楼下", "路上"))
+    content = text(reply)
+    assert "在" in content
+    assert all(word not in content for word in ("家里", "公司", "楼下", "路上"))
 
 
 def test_fallback_recognizes_reset_and_repetition_complaints() -> None:
     reset_reply = build_fallback_reply("清空，我们重新聊", [])
     repeated_reply = build_fallback_reply("你怎么每次都说一样的话", [])
 
-    assert any(word in reset_reply for word in ("重新", "从这一句", "重新开始"))
-    assert any(word in repeated_reply for word in ("重复", "敷衍", "没接住"))
+    assert any(word in text(reset_reply) for word in ("重新", "从这一句", "重新开始"))
+    assert any(word in text(repeated_reply) for word in ("重复", "敷衍", "没接住"))
 
 
 def test_fallback_distinguishes_inconsistency_from_repetition() -> None:
     reply = build_fallback_reply("你怎么每次说得都不一样", [])
 
-    assert any(word in reply for word in ("表达", "跟着", "变"))
-    assert "重复" not in reply
+    assert any(word in text(reply) for word in ("表达", "跟着", "变"))
+    assert "重复" not in text(reply)
 
 
 def test_fallback_avoids_recent_assistant_reply_for_same_intent() -> None:
     first = build_fallback_reply("今天真的很累", [])
     history = [
         {"role": "user", "content": "今天真的很累"},
-        {"role": "assistant", "content": first},
+        {"role": "assistant", "content": text(first)},
     ]
 
     second = build_fallback_reply("还是觉得很累", history)
 
-    assert second != first
-    assert any(word in second for word in ("累", "歇", "撑", "缓"))
+    assert second.bubbles != first.bubbles
+    assert any(word in text(second) for word in ("累", "歇", "撑", "缓"))
 
 
 def test_generic_fallback_continues_the_previous_user_topic() -> None:
@@ -44,9 +49,9 @@ def test_generic_fallback_continues_the_previous_user_topic() -> None:
 
     reply = build_fallback_reply("就是啊", history)
 
-    assert any(word in reply for word in ("听懂", "往下", "在意", "接着"))
-    assert "“最近一直加班到很晚”" not in reply
-    assert "你不用重讲" not in reply
+    assert any(word in text(reply) for word in ("懂", "往下", "在意", "接着", "加班"))
+    assert "“最近一直加班到很晚”" not in text(reply)
+    assert "你不用重讲" not in text(reply)
 
 
 def test_fallback_handles_short_conversational_turns_naturally() -> None:
@@ -56,7 +61,20 @@ def test_fallback_handles_short_conversational_turns_naturally() -> None:
     refusal = build_fallback_reply("别啊", history)
     meta = build_fallback_reply("你还是智能吗？", history)
 
-    assert any(word in initiative for word in ("我来", "那我说", "我先说"))
-    assert any(word in refusal for word in ("好", "不按", "换个"))
-    assert any(word in meta for word in ("AI", "智能", "机械"))
-    assert len({initiative, refusal, meta}) == 3
+    assert any(word in text(initiative) for word in ("我来", "那我说", "我先说"))
+    assert any(word in text(refusal) for word in ("好", "收手", "换个"))
+    assert any(word in text(meta) for word in ("AI", "智能", "机械"))
+    assert len({tuple(initiative.bubbles), tuple(refusal.bubbles), tuple(meta.bubbles)}) == 3
+
+
+def test_fallback_is_multi_bubble_and_contains_no_choice_questions() -> None:
+    reply = build_fallback_reply("你说吧", [])
+
+    assert 1 <= len(reply.bubbles) <= 3
+    assert reply.state in {"attentive", "teasing", "soft", "calm"}
+    for candidates in REPLIES.values():
+        for candidate in candidates:
+            content = "".join(candidate.bubbles)
+            assert "还是" not in content
+            assert "更想" not in content
+            assert "A 或 B" not in content

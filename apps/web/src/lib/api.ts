@@ -1,14 +1,41 @@
 export type MessageMode = "text" | "voice";
+export type Mood = "轻松" | "开心" | "疲惫" | "委屈" | "心烦" | "心动";
+export type EmotionalNeed =
+  "听我说" | "哄哄我" | "逗我开心" | "陪我吐槽" | "暧昧一点";
+export type CompanionState =
+  | "approaching"
+  | "attentive"
+  | "teasing"
+  | "soft"
+  | "proud"
+  | "jealous"
+  | "thinking"
+  | "calm";
+
+export type ProfileContext = {
+  current_mood: Mood | null;
+  emotional_need: EmotionalNeed | null;
+  mood_updated_at: string | null;
+};
 
 export type StreamEvent =
   | { type: "start"; conversation_id: string }
-  | { type: "delta"; content: string }
+  | {
+      type: "companion_state";
+      state: CompanionState;
+      emoji: string;
+      label: string;
+    }
+  | { type: "bubble_start"; index: number }
+  | { type: "delta"; index: number; content: string }
   | {
       type: "message";
+      index: number;
       id: string;
       conversation_id: string;
       content: string;
       message_type: MessageMode;
+      companion_state: CompanionState | null;
     }
   | { type: "done" };
 
@@ -20,6 +47,7 @@ export type StoredMessage = {
   content: string;
   audio_path: string | null;
   duration_ms: number | null;
+  companion_state: CompanionState | null;
   created_at: string;
 };
 
@@ -89,6 +117,37 @@ export async function streamChat(
   });
   if (!response.body) throw new Error("浏览器不支持流式对话");
   await consumeNdjson(response.body, onEvent);
+}
+
+export async function streamOpening(
+  token: string,
+  conversationId: string | null,
+  onEvent: (event: StreamEvent) => void,
+  signal?: AbortSignal,
+) {
+  const response = await apiFetch("/v1/chat/opening", token, {
+    method: "POST",
+    body: JSON.stringify({ conversation_id: conversationId }),
+    signal,
+  });
+  if (!response.body) throw new Error("浏览器不支持流式对话");
+  await consumeNdjson(response.body, onEvent);
+}
+
+export async function loadProfileContext(token: string) {
+  const response = await apiFetch("/v1/profile/context", token);
+  return (await response.json()) as ProfileContext;
+}
+
+export async function updateProfileContext(
+  token: string,
+  input: { current_mood: Mood; emotional_need: EmotionalNeed },
+) {
+  const response = await apiFetch("/v1/profile/context", token, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return (await response.json()) as ProfileContext;
 }
 
 export async function loadLatestConversation(token: string) {

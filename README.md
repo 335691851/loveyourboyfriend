@@ -29,7 +29,8 @@
 
 | 能力           | 当前实现                                                                 |
 | -------------- | ------------------------------------------------------------------------ |
-| 沉浸式移动体验 | 响应式深色 H5、情绪化动效、快捷开场、流式消息气泡                        |
+| 沉浸式移动体验 | 响应式深色 H5、无闪屏入口、动态角色状态、1–3 条流式短气泡                |
+| 情绪化开场     | 新老用户均可设置当前情绪与陪伴需求，由陆川主动发起或承接对话             |
 | 匿名身份       | Supabase Anonymous Sign-Ins；客户端自动创建并恢复匿名 Session            |
 | 智能对话       | LangChain 调用 SiliconFlow 的 `Qwen/Qwen3.5-35B-A3B`，以 NDJSON 增量返回 |
 | 长期记忆       | Structured Output 提取用户明确表达的身份、偏好、关系、日程和边界         |
@@ -87,12 +88,12 @@ sequenceDiagram
         API-->>Web: 转写结果
     end
     Web->>API: POST /v1/chat/stream + Bearer JWT
-    API->>Supabase: 读取最近历史和已确认记忆
-    API->>LC: history + memories + user_input
+    API->>Supabase: 读取当前情绪、最近历史和已确认记忆
+    API->>LC: profile context + history + memories + user_input
     LC->>Model: ChatPromptTemplate → ChatOpenAI
     Model-->>LC: 流式 Token
-    LC-->>Web: StrOutputParser → NDJSON delta
-    API->>Supabase: 保存双方消息并刷新会话有效期
+    LC-->>Web: 状态与多气泡标记 → NDJSON 增量事件
+    API->>Supabase: 分气泡保存消息并刷新会话有效期
     API->>Model: Structured Output 提取长期记忆
     API->>Supabase: 过滤、去重并保存记忆
     opt 用户发起语音消息
@@ -110,15 +111,16 @@ sequenceDiagram
 ```text
 ChatPromptTemplate
   ├─ 陆川角色、安全与关系边界
-  ├─ 最近 7 条对话历史
+  ├─ 合并相邻气泡后的最近 6 轮历史
   ├─ 用户明确确认的长期记忆
+  ├─ 用户当前情绪与陪伴需求
   └─ 当前用户输入
         ↓
 ChatOpenAI（SiliconFlow OpenAI-compatible API）
         ↓
 StrOutputParser
         ↓
-NDJSON 流式事件 → Web 消息气泡
+状态/气泡解析器 → NDJSON 流式事件 → Web 独立消息气泡
 ```
 
 | 模块                                         | 作用                                                                            |
@@ -258,15 +260,18 @@ pnpm dev:api
 
 除 `/health` 外，业务接口都要求 `Authorization: Bearer <Supabase access token>`。
 
-| 方法    | 路径                              | 说明                                                           |
-| ------- | --------------------------------- | -------------------------------------------------------------- |
-| `GET`   | `/health`                         | 服务状态、部署 revision、供应商主机和实际聊天模型              |
-| `POST`  | `/v1/chat/stream`                 | 创建或继续会话，以 NDJSON 返回 `start/delta/message/done` 事件 |
-| `GET`   | `/v1/conversations`               | 查询当前匿名用户最近的会话                                     |
-| `GET`   | `/v1/conversations/{id}/messages` | 恢复指定会话的历史消息                                         |
-| `PATCH` | `/v1/messages/{id}/audio`         | 将私有音频路径关联到消息                                       |
-| `POST`  | `/v1/voice/transcribe`            | 上传音频并返回转写文本                                         |
-| `POST`  | `/v1/voice/speech`                | 将“陆川”的回复合成为 MP3                                       |
+| 方法    | 路径                              | 说明                                                 |
+| ------- | --------------------------------- | ---------------------------------------------------- |
+| `GET`   | `/health`                         | 服务状态、部署 revision、供应商主机和实际聊天模型    |
+| `POST`  | `/v1/chat/stream`                 | 创建或继续会话，以 NDJSON 返回状态、多气泡及消息事件 |
+| `POST`  | `/v1/chat/opening`                | 根据当前情绪与需求让陆川主动开场，不伪造用户消息     |
+| `GET`   | `/v1/profile/context`             | 读取当前匿名用户的短期情绪与陪伴需求                 |
+| `PATCH` | `/v1/profile/context`             | 更新当前情绪与陪伴需求                               |
+| `GET`   | `/v1/conversations`               | 查询当前匿名用户最近的会话                           |
+| `GET`   | `/v1/conversations/{id}/messages` | 恢复指定会话的历史消息                               |
+| `PATCH` | `/v1/messages/{id}/audio`         | 将私有音频路径关联到消息                             |
+| `POST`  | `/v1/voice/transcribe`            | 上传音频并返回转写文本                               |
+| `POST`  | `/v1/voice/speech`                | 将“陆川”的回复合成为 MP3                             |
 
 `/v1/chat/stream` 使用 `application/x-ndjson`，而不是一次性 JSON。前端通过 [`consumeNdjson`](apps/web/src/lib/api.ts) 持续读取事件，使首个 Token 到达后立即更新消息气泡。
 
@@ -279,7 +284,9 @@ pnpm build         # Next.js 生产构建
 pnpm format:check  # Prettier + Ruff format check
 ```
 
-测试覆盖匿名认证、CORS、Schema 契约、LangChain 请求兼容、单一 System Prompt、流式持久化、记忆去重、上下文兜底、语音路由、清理任务、NDJSON 解析和核心聊天 UI。
+测试覆盖匿名认证、CORS、Schema 契约、LangChain 请求兼容、单一 System Prompt、多气泡切分、
+历史角色归并、动态状态、主动开场、流式持久化、记忆去重、上下文兜底、语音路由、清理任务、
+NDJSON 解析和新老用户入口 UI。
 
 ## 生产部署
 

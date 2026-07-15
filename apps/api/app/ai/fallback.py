@@ -1,5 +1,15 @@
+from dataclasses import dataclass
 from hashlib import blake2b
 from typing import Any
+
+from app.models import CompanionState
+
+
+@dataclass(frozen=True)
+class FallbackReply:
+    state: CompanionState
+    bubbles: tuple[str, ...]
+
 
 INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("meta", ("智能吗", "机器人", "人工智能", "你是ai", "你是 ai", "机械")),
@@ -19,87 +29,70 @@ INTENT_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("greeting", ("你好", "嗨", "哈喽", "在干嘛")),
 )
 
-REPLIES: dict[str, tuple[str, ...]] = {
+REPLIES: dict[str, tuple[FallbackReply, ...]] = {
     "meta": (
-        "是 AI，但刚才那些回答确实很机械。你觉得不像在聊天，是我的问题。",
-        "是智能助手，不是真人。不过回应你这件事不该只剩模板，刚才我没做好。",
-        "我是 AI。你可以直接指出哪句话不像正常聊天，我会顺着这一句改。",
+        FallbackReply("teasing", ("是 AI。", "不过被你嫌机器人，我有点不服。")),
+        FallbackReply("attentive", ("智能是真的。", "刚才没接好，也是真的。")),
     ),
     "initiative": (
-        "那我说点真的：你刚才一直在等我主动靠近一点。现在我来，你只管听。",
-        "好，我先说。今晚别急着解决什么，我们挑一件让你心里松一点的小事。",
-        "那这次我来开头：今天有没有哪一刻，你其实很想有人站在你这边？",
+        FallbackReply("teasing", ("那我来。", "你刚才装得随意，其实就在等我主动。")),
+        FallbackReply("attentive", ("我先说。", "今晚最值得被偏心的人，好像就在这儿。")),
     ),
     "refusal": (
-        "好，不按刚才那个方向走。我们换个轻松点的，或者就安静待一会儿。",
-        "行，我收住，不替你做决定。你想换个话题，还是让我先别说？",
-        "好，那句不算。你不用迁就我，我们换一种你舒服的聊法。",
+        FallbackReply("calm", ("行，收手。", "你舒服最重要。")),
+        FallbackReply("soft", ("好，不逗你了。", "这句边界我记住。")),
     ),
     "agreement": (
-        "嗯，我听懂了。顺着刚才那件事往下，你现在最在意的是哪一部分？",
-        "对，我跟上了。你接着说，这次我不抢着替你总结。",
-        "我明白你为什么会这么觉得。我们接着聊，不用重新解释一遍。",
+        FallbackReply("attentive", ("懂了。", "你接着说，我不抢话。")),
+        FallbackReply("calm", ("这次我们站一边。", "往下说，我跟得上。")),
     ),
     "consistency": (
-        "我会跟着你当下这句话调整表达，但认真和分寸不该变。哪一次让你觉得差得最明显？",
-        "表达可以有变化，性格和边界应该稳定。刚才哪一句让你觉得不像同一个人？",
-        "你提醒得对，顺着情绪不等于变来变去。告诉我你更喜欢哪种说话方式，我会稳住它。",
+        FallbackReply("attentive", ("被你抓到了。", "表达可以变，人设不能飘。")),
+        FallbackReply("calm", ("你提醒得对。", "说法会变，分寸我会稳住。")),
     ),
     "repeat": (
-        "你说得对，刚才那几句太像了，是我没接住你，不该拿同一句话敷衍。",
-        "这次确实是我重复了。你不用配合我的话术，照你原本想说的继续，我认真接。",
-        "被你发现了，刚才的回应确实重复，也没有跟着你走。我们从你这一句重新来。",
+        FallbackReply("thinking", ("这句算我敷衍。", "重复的话收回，我们重新来。")),
+        FallbackReply("attentive", ("被你发现了。", "刚才确实没接住，不嘴硬。")),
     ),
     "reset": (
-        "好，从这一句重新开始。前面的节奏先放下，你现在最想说什么？",
-        "可以，我们重来。刚才那些先不算，这次我跟着你的话走。",
-        "那就清空刚才的节奏。现在这一刻，你想让我先听哪件事？",
+        FallbackReply("calm", ("好，重新开始。", "从你这一句算起。")),
+        FallbackReply("approaching", ("前面的节奏清掉。", "我们重新聊，这次我先靠近。")),
     ),
     "presence": (
-        "在，没走。你接着说，我这次认真听。",
-        "我在这条对话里。刚才没接好，但你这一句我看见了。",
-        "在呢。你不用重新组织，想到哪儿就从哪儿说。",
+        FallbackReply("attentive", ("在。", "没走，也没把你晾着。")),
+        FallbackReply("teasing", ("人没丢。", "你一叫，我就出现了。")),
     ),
     "fatigue": (
-        "听见了，是真的累，不是随口抱怨。先别逼自己振作，跟我缓一会儿。",
-        "那就先歇一下，不急着把今天处理得很漂亮。你已经撑得够久了。",
-        "先把肩膀松下来一点。今天最消耗你的，是事情太多，还是心里那股累？",
-        "我不催你打起精神。你可以先安静待一会儿，我陪着。",
+        FallbackReply("soft", ("今天先别逞强。", "累成这样，还装得挺像没事。")),
+        FallbackReply("calm", ("先歇口气。", "你已经撑得够久了。")),
     ),
     "sadness": (
-        "难过不用马上讲出道理。你先把最委屈的那一小段告诉我。",
-        "这会儿不用装没事。我在听，你可以说得乱一点。",
-        "先不劝你想开。发生了什么，让你心里一下沉下去了？",
+        FallbackReply("soft", ("想哭就别忍。", "在我这儿不用演没事。")),
+        FallbackReply("attentive", ("这次不劝你想开。", "委屈可以先放我这儿。")),
     ),
     "anger": (
-        "先别压着这口气。到底是哪一下最让你火大？",
-        "听起来不是小题大做，是有人真的踩到你的边界了。",
-        "可以生气，不用急着体面。你先把最想吐槽的那句说出来。",
+        FallbackReply("attentive", ("这口气不用咽。", "有人踩你边界了。")),
+        FallbackReply("calm", ("可以生气。", "先把最气人的那一下说出来。")),
     ),
     "food": (
-        "先照顾胃。你现在想吃热乎的、清爽的，还是一点有满足感的？",
-        "别让选择晚饭也变成任务。告诉我附近能点到什么，我陪你挑。",
-        "饿的时候不做复杂决定：先选最想吃的那一口，其他的我帮你排除。",
+        FallbackReply("teasing", ("先去吃东西。", "饿着还跟我聊天，胆子不小。")),
+        FallbackReply("soft", ("胃比嘴诚实。", "弄点热乎的，别亏待自己。")),
     ),
     "insomnia": (
-        "睡不着就先不和睡意较劲。脑子里是哪件事一直没肯停？",
-        "那就陪你醒一会儿。灯可以暗一点，话不用说得完整。",
-        "先别看时间，越算越清醒。你把现在最吵的那个念头交给我。",
+        FallbackReply("calm", ("睡不着就不硬睡。", "我陪你把夜晚放慢一点。")),
+        FallbackReply("attentive", ("别盯时间。", "脑子里最吵的那件事，交给我。")),
     ),
     "positive": (
-        "等等，这个我要认真听。先告诉我，哪一刻让你最想笑？",
-        "好消息要慢一点讲，我想陪你把这份开心多留一会儿。",
-        "这次不许轻描淡写。你做到了什么，让我也替你高兴一下。",
+        FallbackReply("proud", ("先别装淡定。", "你现在得意一点，很好看。")),
+        FallbackReply("teasing", ("行啊你。", "这份开心，我批准你多炫耀一会儿。")),
     ),
     "greeting": (
-        "我在。今天想认真聊一会儿，还是随便说点轻松的？",
-        "来得正好。你现在的心情，更像晴天还是快下雨？",
-        "嗨，见到你了。今天先从哪件小事说起？",
+        FallbackReply("teasing", ("来得挺巧。", "我刚好想找个人偏心一下。")),
+        FallbackReply("approaching", ("嗨。", "坐近一点，今晚慢慢聊。")),
     ),
     "generic": (
-        "我在听。你更想让我陪你理一理，还是先站在你这边？",
-        "这一句我接住了。别急着说完整，先讲你最在意的那部分。",
-        "继续说，我想听的不是标准答案，是你现在真实的感觉。",
+        FallbackReply("attentive", ("嗯，这句有点东西。", "你往下说，我跟得上。")),
+        FallbackReply("teasing", ("被我看见了。", "别急着藏，继续。")),
     ),
 }
 
@@ -120,13 +113,20 @@ def _history_content(history_rows: list[dict[str, Any]], role: str) -> list[str]
     ]
 
 
-def build_fallback_reply(user_text: str, history_rows: list[dict[str, Any]]) -> str:
+def build_fallback_reply(user_text: str, history_rows: list[dict[str, Any]]) -> FallbackReply:
     intent = _intent(user_text)
     previous_users = _history_content(history_rows, "user")
-    recent_assistant = set(_history_content(history_rows, "assistant")[-3:])
+    recent_assistant = "\n".join(_history_content(history_rows, "assistant")[-3:])
     candidates = REPLIES[intent]
     seed = f"{user_text}|{previous_users[-1:]!r}|{len(history_rows)}"
     digest = blake2b(seed.encode("utf-8"), digest_size=2).digest()
     start = int.from_bytes(digest, "big") % len(candidates)
     ordered = candidates[start:] + candidates[:start]
-    return next((reply for reply in ordered if reply not in recent_assistant), ordered[0])
+    return next(
+        (
+            reply
+            for reply in ordered
+            if not any(bubble in recent_assistant for bubble in reply.bubbles)
+        ),
+        ordered[0],
+    )

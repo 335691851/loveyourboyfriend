@@ -5,7 +5,7 @@ from uuid import UUID
 import httpx
 
 from app.config import Settings
-from app.models import MemoryCandidate
+from app.models import MemoryCandidate, ProfileContextUpdate
 
 
 class ChatRepository:
@@ -63,6 +63,45 @@ class ChatRepository:
             prefer="resolution=merge-duplicates,return=minimal",
         )
 
+    async def get_profile_context(self) -> dict[str, Any]:
+        rows = await self._request(
+            "GET",
+            "profiles",
+            params={
+                "user_id": f"eq.{self.user_id}",
+                "select": "current_mood,emotional_need,mood_updated_at",
+                "limit": "1",
+            },
+        )
+        return (
+            rows[0]
+            if rows
+            else {
+                "current_mood": None,
+                "emotional_need": None,
+                "mood_updated_at": None,
+            }
+        )
+
+    async def update_profile_context(
+        self,
+        context: ProfileContextUpdate,
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        rows = await self._request(
+            "PATCH",
+            "profiles",
+            params={"user_id": f"eq.{self.user_id}"},
+            json={
+                "current_mood": context.current_mood,
+                "emotional_need": context.emotional_need,
+                "mood_updated_at": now,
+                "last_seen_at": now,
+            },
+            prefer="return=representation",
+        )
+        return rows[0]
+
     async def create_conversation(self) -> dict[str, Any]:
         rows = await self._request(
             "POST",
@@ -94,7 +133,8 @@ class ChatRepository:
             params={
                 "conversation_id": f"eq.{conversation_id}",
                 "select": (
-                    "id,conversation_id,role,message_type,content,audio_path,duration_ms,created_at"
+                    "id,conversation_id,role,message_type,content,audio_path,duration_ms,"
+                    "companion_state,created_at"
                 ),
                 "order": "created_at.desc",
                 "limit": str(limit),
@@ -122,6 +162,7 @@ class ChatRepository:
         message_type: str = "text",
         audio_path: str | None = None,
         duration_ms: int | None = None,
+        companion_state: str | None = None,
     ) -> dict[str, Any]:
         rows = await self._request(
             "POST",
@@ -134,6 +175,7 @@ class ChatRepository:
                 "message_type": message_type,
                 "audio_path": audio_path,
                 "duration_ms": duration_ms,
+                "companion_state": companion_state,
             },
             prefer="return=representation",
         )

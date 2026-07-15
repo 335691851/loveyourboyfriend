@@ -13,3 +13,7 @@ def test_companion_prompt_sets_persona_and_relationship_boundaries() -> None:
     assert "25—80" in prompt
     assert "不要复述" in prompt
     assert "像正在微信聊天" in prompt
+    assert "撩妹高手" in prompt
+    assert "[state:" in prompt
+    assert "[bubble]" in prompt
+    assert "你是想 a，还是 b" in prompt

@@ -17,6 +17,8 @@ def test_chat_chain_returns_plain_text() -> None:
             "history": [],
             "memories": "她喜欢先被倾听",
             "user_input": "今天很累",
+            "current_mood": "疲惫",
+            "emotional_need": "听我说",
         }
     )
 
@@ -151,7 +153,13 @@ async def test_chat_chain_sends_only_one_leading_system_message() -> None:
         chunks = [
             chunk
             async for chunk in chain.astream(
-                {"history": [], "memories": "喜欢夜跑", "user_input": "晚上好"}
+                {
+                    "history": [],
+                    "memories": "喜欢夜跑",
+                    "user_input": "晚上好",
+                    "current_mood": "轻松",
+                    "emotional_need": "暧昧一点",
+                }
             )
         ]
 

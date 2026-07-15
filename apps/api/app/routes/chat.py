@@ -9,7 +9,13 @@ from app.ai.chains import build_chat_chain
 from app.ai.memory import build_memory_extractor
 from app.config import Settings, get_settings
 from app.dependencies import CurrentUser, get_http_client
-from app.models import AudioAttachmentRequest, ChatRequest
+from app.models import (
+    AudioAttachmentRequest,
+    ChatRequest,
+    OpeningRequest,
+    ProfileContext,
+    ProfileContextUpdate,
+)
 from app.repositories.chat import ChatRepository
 from app.services.chat import ChatService
 
@@ -30,6 +36,20 @@ def _repository(
         ) from error
 
 
+def _chat_service(repository: ChatRepository, settings: Settings) -> ChatService:
+    try:
+        return ChatService(
+            repository=repository,
+            chain=build_chat_chain(settings=settings),
+            memory_extractor=build_memory_extractor(settings=settings),
+        )
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Language model is not configured",
+        ) from error
+
+
 @router.post("/chat/stream")
 async def stream_chat(
     request: ChatRequest,
@@ -40,22 +60,51 @@ async def stream_chat(
     if request.audio_path and not request.audio_path.startswith(f"{user.id}/"):
         raise HTTPException(status_code=403, detail="Invalid voice object path")
     repository = _repository(user, client, settings)
-    try:
-        service = ChatService(
-            repository=repository,
-            chain=build_chat_chain(settings=settings),
-            memory_extractor=build_memory_extractor(settings=settings),
-        )
-    except RuntimeError as error:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Language model is not configured",
-        ) from error
+    service = _chat_service(repository, settings)
     return StreamingResponse(
         service.stream(user, request),
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/chat/opening")
+async def stream_opening(
+    request: OpeningRequest,
+    user: CurrentUser,
+    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StreamingResponse:
+    repository = _repository(user, client, settings)
+    service = _chat_service(repository, settings)
+    return StreamingResponse(
+        service.stream_opening(user, request),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/profile/context", response_model=ProfileContext)
+async def get_profile_context(
+    user: CurrentUser,
+    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    repository = _repository(user, client, settings)
+    await repository.ensure_profile()
+    return await repository.get_profile_context()
+
+
+@router.patch("/profile/context", response_model=ProfileContext)
+async def update_profile_context(
+    request: ProfileContextUpdate,
+    user: CurrentUser,
+    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    repository = _repository(user, client, settings)
+    await repository.ensure_profile()
+    return await repository.update_profile_context(request)
 
 
 @router.patch("/messages/{message_id}/audio", status_code=204)

@@ -1,7 +1,21 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
+
+Mood = Literal["轻松", "开心", "疲惫", "委屈", "心烦", "心动"]
+EmotionalNeed = Literal["听我说", "哄哄我", "逗我开心", "陪我吐槽", "暧昧一点"]
+CompanionState = Literal[
+    "approaching",
+    "attentive",
+    "teasing",
+    "soft",
+    "proud",
+    "jealous",
+    "thinking",
+    "calm",
+]
 
 
 class AuthenticatedUser(BaseModel):
@@ -25,6 +39,21 @@ class ChatRequest(BaseModel):
         if not normalized:
             raise ValueError("content must not be blank")
         return normalized
+
+
+class OpeningRequest(BaseModel):
+    conversation_id: UUID | None = None
+
+
+class ProfileContext(BaseModel):
+    current_mood: Mood | None = None
+    emotional_need: EmotionalNeed | None = None
+    mood_updated_at: datetime | None = None
+
+
+class ProfileContextUpdate(BaseModel):
+    current_mood: Mood
+    emotional_need: EmotionalNeed
 
 
 class MemoryCandidate(BaseModel):
@@ -52,6 +81,7 @@ class MessageRecord(BaseModel):
     content: str
     audio_path: str | None = None
     duration_ms: int | None = None
+    companion_state: CompanionState | None = None
     created_at: str
 
 
