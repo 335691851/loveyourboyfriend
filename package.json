@@ -1,0 +1,24 @@
+{
+  "name": "loveyourboyfriend",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "pnpm dev:web",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "uv run --project apps/api uvicorn app.main:app --reload --port 8000",
+    "test": "pnpm test:web && pnpm test:api",
+    "test:web": "pnpm --filter web test",
+    "test:api": "uv run --project apps/api pytest apps/api/tests -q",
+    "lint": "pnpm lint:web && pnpm lint:api",
+    "lint:web": "pnpm --filter web lint && pnpm --filter web typecheck",
+    "lint:api": "uv run --project apps/api ruff format --check apps/api && uv run --project apps/api ruff check apps/api",
+    "build": "pnpm build:web",
+    "build:web": "pnpm --filter web build",
+    "format": "prettier --write \"apps/web/**/*.{js,mjs,ts,tsx,css,json}\" \"docs/**/*.md\" \"*.{json,yaml,yml,md}\" && uv run --project apps/api ruff format apps/api",
+    "format:check": "prettier --check \"apps/web/**/*.{js,mjs,ts,tsx,css,json}\" \"docs/**/*.md\" \"*.{json,yaml,yml,md}\" && uv run --project apps/api ruff format --check apps/api"
+  },
+  "devDependencies": {
+    "prettier": "3.9.5",
+    "supabase": "2.109.1"
+  }
+}

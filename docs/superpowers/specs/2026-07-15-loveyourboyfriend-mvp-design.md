@@ -28,4 +28,3 @@ The initial repository must be safe to import into Vercel and Render without pro
 ## Experience baseline
 
 The UI uses the approved immersive black-rose palette with soft gradients, flat controls, restrained particles and mobile safe-area handling. The scaffold renders a polished empty conversation state and composer without making network calls.
-

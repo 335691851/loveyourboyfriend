@@ -22,11 +22,13 @@
 ### Task 1: Repository and API skeleton
 
 **Files:**
+
 - Create: `.gitignore`, `.env.example`, `.python-version`, `README.md`
 - Create: `apps/api/pyproject.toml`, `apps/api/app/__init__.py`, `apps/api/app/main.py`, `apps/api/app/config.py`
 - Test: `apps/api/tests/test_health.py`, `apps/api/tests/test_config.py`
 
 **Interfaces:**
+
 - Produces: `GET /health -> {"status":"ok","service":"loveyourboyfriend-api"}`
 - Produces: `Settings` with environment-backed API configuration and safe defaults
 
@@ -62,21 +64,25 @@ Expected: all API tests pass.
 ### Task 2: Mobile web shell
 
 **Files:**
+
 - Create: `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`
 - Create: `apps/web/package.json`, `apps/web/next.config.ts`, `apps/web/tsconfig.json`, `apps/web/src/app/layout.tsx`, `apps/web/src/app/page.tsx`, `apps/web/src/app/globals.css`
 - Create: `apps/web/src/components/chat-shell.tsx`
 - Test: `apps/web/src/components/chat-shell.test.tsx`, `apps/web/vitest.config.ts`, `apps/web/vitest.setup.ts`
 
 **Interfaces:**
+
 - Produces: `ChatShell` client component with character header, welcome state and text/voice composer
 
 - [ ] **Step 1: Write a failing UI test**
 
 ```tsx
-render(<ChatShell />)
-expect(screen.getByRole('heading', { name: '今晚想聊点什么？' })).toBeInTheDocument()
-expect(screen.getByLabelText('输入消息')).toBeInTheDocument()
-expect(screen.getByRole('button', { name: '发送语音' })).toBeInTheDocument()
+render(<ChatShell />);
+expect(
+  screen.getByRole("heading", { name: "今晚想聊点什么？" }),
+).toBeInTheDocument();
+expect(screen.getByLabelText("输入消息")).toBeInTheDocument();
+expect(screen.getByRole("button", { name: "发送语音" })).toBeInTheDocument();
 ```
 
 - [ ] **Step 2: Verify the test fails because `ChatShell` is missing**
@@ -96,11 +102,13 @@ Expected: tests and Next.js production build pass.
 ### Task 3: Supabase and deployment contract
 
 **Files:**
+
 - Create: `supabase/config.toml`
 - Create: `supabase/migrations/20260715000100_initial_chat_schema.sql`
 - Modify: `README.md`, `.env.example`
 
 **Interfaces:**
+
 - Produces: `profiles`, `conversations`, `messages` and `memories` tables keyed by `auth.users.id`
 - Produces: owner-only RLS policies and expiry indexes
 
@@ -122,4 +130,3 @@ Expected: every command exits with status 0.
 
 Run: `git status --short && git diff --check`
 Expected: no secrets, build products, local environments or whitespace errors are tracked.
-

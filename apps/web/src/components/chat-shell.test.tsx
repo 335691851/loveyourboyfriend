@@ -1,0 +1,18 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { ChatShell } from "./chat-shell";
+
+describe("ChatShell", () => {
+  it("renders the mobile conversation entry points", () => {
+    render(<ChatShell />);
+
+    expect(
+      screen.getByRole("heading", { name: "今晚想聊点什么？" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("输入消息")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "发送语音" }),
+    ).toBeInTheDocument();
+  });
+});
