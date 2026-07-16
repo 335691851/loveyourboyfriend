@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.siliconflow.cn/v1"
     chat_model: str = DEFAULT_SILICONFLOW_CHAT_MODEL
     memory_model: str = DEFAULT_SILICONFLOW_MEMORY_MODEL
-    transcription_model: str = "FunAudioLLM/SenseVoiceSmall"
+    # Default to a faster transcription model; can be overridden via environment.
+    transcription_model: str = "FunAudioLLM/SenseVoiceFast"
     speech_model: str = "FunAudioLLM/CosyVoice2-0.5B"
     speech_voice: str = "FunAudioLLM/CosyVoice2-0.5B:david"
     max_audio_bytes: int = 10_000_000

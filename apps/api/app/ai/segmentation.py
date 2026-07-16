@@ -14,7 +14,8 @@ ALLOWED_STATES: tuple[CompanionState, ...] = (
     "calm",
 )
 STATE_PREFIX = "[STATE:"
-BUBBLE_MARKER = "\n[BUBBLE]\n"
+# Accept the canonical marker as well as occurrences without surrounding newlines.
+BUBBLE_MARKER = "[BUBBLE]"
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ class ReplySegmenter:
     def _drain(self, *, final: bool = False) -> list[SegmentEvent]:
         events: list[SegmentEvent] = []
         while True:
+            # Find the next occurrence of the marker regardless of surrounding newlines/spaces.
             marker_at = self._buffer.find(BUBBLE_MARKER)
             if marker_at < 0:
                 if final:
@@ -104,16 +106,24 @@ class ReplySegmenter:
                     self._buffer = ""
                     events.extend(self._complete())
                 else:
+                    # If a partial marker is present at the end, keep it in buffer.
                     suffix_length = self._marker_suffix_length(self._buffer)
                     safe_end = len(self._buffer) - suffix_length
                     events.extend(self._emit_text(self._buffer[:safe_end]))
                     self._buffer = self._buffer[safe_end:]
                 return events
 
+            # Extract text before the marker and advance buffer past the marker.
             before = self._buffer[:marker_at]
             self._buffer = self._buffer[marker_at + len(BUBBLE_MARKER) :]
+
+            # Trim stray surrounding whitespace/newlines around the marker boundaries.
+            before = before.rstrip('\n')
+            self._buffer = self._buffer.lstrip('\n')
+
             events.extend(self._emit_text(before))
             if self._index >= 2:
+                # Already reached max bubbles: merge remainder into current bubble
                 events.extend(self._emit_text(" "))
                 continue
             completed = self._complete()

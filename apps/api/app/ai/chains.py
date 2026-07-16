@@ -24,7 +24,9 @@ def build_chat_model(
         temperature=0.8,
         extra_body={"enable_thinking": False, "max_tokens": 180},
         streaming=True,
-        stream_chunk_timeout=8,
+        # Reduce chunk timeout so upstream chunks arrive more frequently and create a more
+        # continuous multi-bubble experience in the client.
+        stream_chunk_timeout=1,
         timeout=20,
         max_retries=0,
         http_async_client=http_async_client,
