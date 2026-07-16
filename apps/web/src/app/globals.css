@@ -21,6 +21,7 @@ body {
   min-height: 100%;
   background: #08060a;
   color: var(--ink);
+  -webkit-text-size-adjust: 100%;
   font-family:
     "SF Pro Display", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
@@ -896,7 +897,7 @@ button:disabled {
   outline: 0;
   color: var(--ink);
   background: transparent;
-  font-size: 13px;
+  font-size: 16px; /* prevent iOS Safari zoom-on-focus */
 }
 
 .input-wrap input::placeholder {

@@ -17,6 +17,11 @@ SUPPORTED_AUDIO_TYPES = {
     "audio/ogg",
     "audio/wav",
     "audio/webm",
+    # common mobile containers / codecs (3gp/3gpp, x-m4a, amr)
+    "audio/3gpp",
+    "audio/3gp",
+    "audio/x-m4a",
+    "audio/amr",
 }
 
 
@@ -41,8 +46,17 @@ async def transcribe_voice(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, str]:
     del user
-    if audio.content_type not in SUPPORTED_AUDIO_TYPES:
-        raise HTTPException(status_code=415, detail="Unsupported audio format")
+    # Normalize content type (strip parameters like `;codecs=opus`) and accept common audio/video container types
+    main_type = (audio.content_type or "").split(";")[0].strip().lower()
+    if not (
+        main_type in SUPPORTED_AUDIO_TYPES
+        or main_type.startswith("audio/")
+        or main_type.startswith("video/")
+    ):
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported audio format: {audio.content_type or 'unknown'}",
+        )
     content = await audio.read(settings.max_audio_bytes + 1)
     if len(content) > settings.max_audio_bytes:
         raise HTTPException(status_code=413, detail="Audio message is too large")
