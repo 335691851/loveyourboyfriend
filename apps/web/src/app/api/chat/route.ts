@@ -22,6 +22,7 @@ type RequestBody = {
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   profile?: { current_mood?: string | null; emotional_need?: string | null };
   response_mode?: "text" | "voice";
+  interaction_mode?: "reply" | "opening" | "proactive";
 };
 
 async function generate(body: RequestBody) {
@@ -30,6 +31,14 @@ async function generate(body: RequestBody) {
   const baseUrl = (
     process.env.OPENAI_BASE_URL ?? "https://api.siliconflow.cn/v1"
   ).replace(/\/$/, "");
+  const proactiveInstruction =
+    body.interaction_mode === "proactive"
+      ? "\n这是一次系统触发的主动互动。结合最近对话，像刚好想到对方一样主动说一句；8—28个字，只用一个气泡。不要提等待、未回复、计时或系统触发，不催促用户。可以关心一个具体细节、轻轻逗一句，或自然延续没说完的话。"
+      : "";
+  const userMessage =
+    body.interaction_mode === "proactive"
+      ? "请现在自然地主动说一句。"
+      : body.content;
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -44,14 +53,15 @@ async function generate(body: RequestBody) {
       messages: [
         {
           role: "system",
-          content: companionPrompt(
-            body.profile as Parameters<typeof companionPrompt>[0],
-          ),
+          content:
+            companionPrompt(
+              body.profile as Parameters<typeof companionPrompt>[0],
+            ) + proactiveInstruction,
         },
         ...(body.history ?? [])
           .slice(-8)
           .map(({ role, content }) => ({ role, content })),
-        { role: "user", content: body.content },
+        { role: "user", content: userMessage },
       ],
       stream: false,
     }),

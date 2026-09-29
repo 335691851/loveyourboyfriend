@@ -58,6 +58,7 @@ type ChatInput = {
   history: StoredMessage[];
   profile: ProfileContext;
   duration_ms?: number;
+  interaction_mode?: "reply" | "opening" | "proactive";
 };
 
 async function routeFetch(path: string, init?: RequestInit) {
@@ -121,6 +122,29 @@ export async function streamOpening(
       response_mode: "text",
       history,
       profile,
+      interaction_mode: "opening",
+    },
+    onEvent,
+    signal,
+  );
+}
+
+export async function streamProactive(
+  conversationId: string,
+  history: StoredMessage[],
+  profile: ProfileContext,
+  onEvent: (event: StreamEvent) => void,
+  signal?: AbortSignal,
+) {
+  await streamChat(
+    {
+      content: "主动互动",
+      conversation_id: conversationId,
+      input_mode: "text",
+      response_mode: "text",
+      history,
+      profile,
+      interaction_mode: "proactive",
     },
     onEvent,
     signal,

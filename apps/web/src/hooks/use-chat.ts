@@ -15,6 +15,7 @@ import {
   type StoredMessage,
   streamChat,
   streamOpening,
+  streamProactive,
   synthesizeVoice,
   transcribeVoice,
   updateProfileContext,
@@ -57,6 +58,19 @@ const DEFAULT_COMPANION_MOOD: CompanionMood = {
   state: "approaching",
   ...STATE_META.approaching,
 };
+
+const PROACTIVE_MIN_IDLE_MS = 45_000;
+const PROACTIVE_MAX_IDLE_MS = 100_000;
+const PROACTIVE_COOLDOWN_MS = 8 * 60_000;
+const PROACTIVE_CHANCE = 0.42;
+const PROACTIVE_MAX_PER_SESSION = 2;
+
+export function proactiveIdleDelay(random = Math.random) {
+  return Math.round(
+    PROACTIVE_MIN_IDLE_MS +
+      random() * (PROACTIVE_MAX_IDLE_MS - PROACTIVE_MIN_IDLE_MS),
+  );
+}
 
 function fromStored(message: StoredMessage): ChatMessage | null {
   if (message.role === "system") return null;
@@ -101,6 +115,8 @@ export function useChat() {
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const proactiveCount = useRef(0);
+  const lastProactiveAt = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -287,6 +303,112 @@ export function useChat() {
     },
     [consumeAssistantStream, conversationId, messages],
   );
+
+  const initiateProactive = useCallback(async () => {
+    if (
+      inFlight.current ||
+      !conversationId ||
+      !profile ||
+      document.visibilityState !== "visible"
+    )
+      return false;
+    inFlight.current = true;
+    setSending(true);
+    try {
+      await consumeAssistantStream(
+        (onEvent) =>
+          streamProactive(
+            conversationId,
+            toHistory(messages),
+            profile,
+            onEvent,
+          ),
+        "text",
+      );
+      proactiveCount.current += 1;
+      lastProactiveAt.current = Date.now();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  }, [consumeAssistantStream, conversationId, messages, profile]);
+
+  useEffect(() => {
+    if (
+      entryMode !== "chat" ||
+      sending ||
+      transcribing ||
+      !conversationId ||
+      !profile ||
+      !messages.some((message) => message.role === "user") ||
+      proactiveCount.current >= PROACTIVE_MAX_PER_SESSION
+    )
+      return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    let disposed = false;
+    let lastActivityAt = Date.now();
+    let targetIdle = proactiveIdleDelay();
+
+    const noteActivity = () => {
+      lastActivityAt = Date.now();
+      targetIdle = proactiveIdleDelay();
+      clearTimeout(timer);
+      timer = setTimeout(check, targetIdle);
+    };
+    const check = () => {
+      if (disposed) return;
+      const now = Date.now();
+      const idleFor = now - lastActivityAt;
+      const cooldownLeft =
+        PROACTIVE_COOLDOWN_MS - (now - lastProactiveAt.current);
+      if (
+        document.visibilityState !== "visible" ||
+        inFlight.current ||
+        idleFor < targetIdle ||
+        cooldownLeft > 0
+      ) {
+        timer = setTimeout(
+          check,
+          Math.max(1_000, targetIdle - idleFor, cooldownLeft),
+        );
+        return;
+      }
+      if (Math.random() > PROACTIVE_CHANCE) {
+        targetIdle = proactiveIdleDelay();
+        lastActivityAt = now;
+        timer = setTimeout(check, targetIdle);
+        return;
+      }
+      void initiateProactive();
+    };
+
+    const activityEvents = ["pointerdown", "keydown", "touchstart"] as const;
+    activityEvents.forEach((event) =>
+      window.addEventListener(event, noteActivity, { passive: true }),
+    );
+    document.addEventListener("visibilitychange", noteActivity);
+    timer = setTimeout(check, targetIdle);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      activityEvents.forEach((event) =>
+        window.removeEventListener(event, noteActivity),
+      );
+      document.removeEventListener("visibilitychange", noteActivity);
+    };
+  }, [
+    conversationId,
+    entryMode,
+    initiateProactive,
+    messages,
+    profile,
+    sending,
+    transcribing,
+  ]);
 
   const send = useCallback(
     async (
