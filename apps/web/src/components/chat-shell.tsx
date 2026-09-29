@@ -57,7 +57,7 @@ function MessageBubble({
             <span>{message.role === "user" ? "语音已转写" : "陆川的语音"}</span>
           </div>
         )}
-        <p>{message.content || "正在想怎么逗你…"}</p>
+        <p>{message.content || "…"}</p>
         <div className="bubble-meta">
           {message.messageType === "voice" &&
             (message.role === "assistant" || message.audioPath) &&
@@ -95,6 +95,12 @@ export function ChatShell() {
   const chat = useChat();
   const [input, setInput] = useState("");
   const [showInfo, setShowInfo] = useState(false);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const followRef = useRef(true);
   const endRef = useRef<HTMLDivElement>(null);
   const recorder = useVoiceRecorder(chat.sendVoice);
   const busy = chat.sending || chat.transcribing;
@@ -103,21 +109,58 @@ export function ChatShell() {
   useEffect(() => {
     if (
       chat.entryMode === "chat" &&
-      typeof endRef.current?.scrollIntoView === "function"
+      followRef.current &&
+      conversationRef.current
     ) {
-      endRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
     }
   }, [chat.entryMode, chat.messages, busy]);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const resize = () => {
+      if (viewport && viewport.scale === 1) {
+        viewportRef.current?.style.setProperty(
+          "--app-height",
+          `${viewport.height}px`,
+        );
+        if (followRef.current && conversationRef.current) {
+          conversationRef.current.scrollTop =
+            conversationRef.current.scrollHeight;
+        }
+      }
+    };
+    resize();
+    viewport?.addEventListener("resize", resize);
+    return () => viewport?.removeEventListener("resize", resize);
+  }, []);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "24px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  }, [input, chat.entryMode]);
+
+  useEffect(() => {
+    if (showInfo) dialogRef.current?.showModal();
+    else dialogRef.current?.close();
+  }, [showInfo]);
+
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (!input.trim() || busy || recorder.recording || !chat.ready) return;
+    followRef.current = true;
+    setAwayFromBottom(false);
     const content = input;
     setInput("");
-    void chat.send(content);
+    void chat.send(content).then((sent) => {
+      if (sent === false) setInput((draft) => draft || content);
+    });
   }
 
   return (
-    <main className="app-stage">
+    <main className="app-stage" ref={viewportRef}>
       <section
         className={`phone-shell state-${chat.companionMood.state} ${
           recorder.recording
@@ -137,7 +180,9 @@ export function ChatShell() {
             className="icon-button mood-button"
             type="button"
             aria-label="调整我的当前状态"
-            disabled={chat.entryMode === "loading"}
+            disabled={
+              chat.entryMode === "loading" || busy || recorder.recording
+            }
             onClick={chat.showCheckin}
           >
             <Icon name="mood" />
@@ -153,8 +198,8 @@ export function ChatShell() {
                 <span>AI</span>
               </div>
               <p className="companion-status" key={chat.companionMood.state}>
-                <b>{chat.companionMood.emoji}</b>
-                {busy ? "正在回应你" : chat.companionMood.label}
+                <i aria-hidden="true" />
+                {recorder.recording ? "听你说" : busy ? "正在输入…" : "慢慢聊"}
               </p>
             </div>
           </div>
@@ -169,8 +214,15 @@ export function ChatShell() {
         </header>
 
         <div
+          ref={conversationRef}
+          onScroll={() => {
+            const el = conversationRef.current;
+            if (!el) return;
+            const away = el.scrollHeight - el.scrollTop - el.clientHeight > 90;
+            followRef.current = !away;
+            setAwayFromBottom(away);
+          }}
           className={`conversation conversation-${chat.entryMode}`}
-          aria-live="polite"
         >
           {chat.entryMode === "loading" ? (
             <LoadingScene />
@@ -185,14 +237,27 @@ export function ChatShell() {
             />
           ) : (
             <>
-              <div className="date-pill">今晚 · 只属于这段对话</div>
-              {chat.messages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  onSpeak={() => void chat.speak(message)}
-                />
-              ))}
+              <div className="date-pill">陆川 · 与你</div>
+              {chat.messages.length === 0 && !busy && (
+                <div className="chat-intro">
+                  <span>不必想好开场白。</span>
+                  <p>一句「在吗」，也可以。</p>
+                </div>
+              )}
+              <div
+                role="log"
+                aria-label="聊天记录"
+                aria-live="polite"
+                aria-relevant="additions text"
+              >
+                {chat.messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    onSpeak={() => void chat.speak(message)}
+                  />
+                ))}
+              </div>
               {busy && (
                 <div className="activity-row">
                   <div className="typing" aria-label="陆川正在输入">
@@ -201,7 +266,7 @@ export function ChatShell() {
                     <span />
                   </div>
                   <small>
-                    {chat.transcribing ? "正在听懂你的语音" : "陆川正在回应"}
+                    {chat.transcribing ? "正在转写语音…" : "正在输入…"}
                   </small>
                 </div>
               )}
@@ -215,12 +280,34 @@ export function ChatShell() {
           )}
         </div>
 
+        {awayFromBottom && chat.entryMode === "chat" && (
+          <button
+            className="jump-latest"
+            type="button"
+            onClick={() => {
+              followRef.current = true;
+              setAwayFromBottom(false);
+              conversationRef.current?.scrollTo({
+                top: conversationRef.current.scrollHeight,
+                behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+                  .matches
+                  ? "instant"
+                  : "smooth",
+              });
+            }}
+          >
+            回到最新消息 ↓
+          </button>
+        )}
+
         {chat.entryMode === "chat" && (
           <footer className="composer-wrap">
             {recorder.recording && (
               <div className="recording-strip">
-                <span />
-                正在录音，再点一次发送
+                <span>正在录音 · 再点麦克风发送</span>
+                <button type="button" onClick={recorder.cancel}>
+                  取消
+                </button>
               </div>
             )}
             {recorder.error && (
@@ -242,61 +329,81 @@ export function ChatShell() {
               </button>
               <label className="input-wrap">
                 <span className="sr-only">输入消息</span>
-                <input
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  enterKeyHint="send"
                   aria-label="输入消息"
-                  placeholder="和他说点什么…"
+                  placeholder={
+                    busy ? "可以先写下一句…" : "说点什么，或者发条语音"
+                  }
                   value={input}
                   maxLength={4000}
-                  disabled={!chat.ready || busy || recorder.recording}
+                  disabled={!chat.ready || recorder.recording}
                   onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing &&
+                      event.nativeEvent.keyCode !== 229
+                    ) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                 />
               </label>
               <button
                 className="send-button"
                 type="submit"
                 aria-label="发送消息"
-                disabled={!input.trim() || !chat.ready || busy}
+                disabled={
+                  !input.trim() || !chat.ready || busy || recorder.recording
+                }
               >
                 <Icon name="send" />
               </button>
             </form>
-            <p className="privacy-copy">
-              仅限 18+ · 匿名使用 · 对话 90 天后自动清理
-            </p>
+            <p className="privacy-copy">不赶时间，慢慢说。</p>
           </footer>
         )}
 
-        {showInfo && (
-          <div
-            className="sheet-backdrop"
-            role="presentation"
-            onClick={() => setShowInfo(false)}
-          >
-            <aside
-              className="info-sheet"
-              role="dialog"
-              aria-modal="true"
-              aria-label="关于陆川"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="sheet-handle" />
-              <span className="eyebrow">ABOUT LU CHUAN</span>
-              <h2>有感觉，也有边界</h2>
-              <p>
-                陆川是虚构的 AI
-                角色，不是真实的人。他会记住你明确分享的偏好，让聊天更连贯，但不会要求你依赖或只选择他。
-              </p>
-              <div className="trust-grid">
-                <span>匿名 UUID</span>
-                <span>90 天清理</span>
-                <span>随时改状态</span>
-              </div>
-              <button type="button" onClick={() => setShowInfo(false)}>
-                知道了
-              </button>
-            </aside>
+        <dialog
+          ref={dialogRef}
+          className="info-sheet"
+          aria-label="关于陆川"
+          onClose={() => setShowInfo(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              const box = event.currentTarget.getBoundingClientRect();
+              if (
+                event.clientX < box.left ||
+                event.clientX > box.right ||
+                event.clientY < box.top ||
+                event.clientY > box.bottom
+              )
+                setShowInfo(false);
+            }
+          }}
+        >
+          <div className="sheet-handle" />
+          <span className="eyebrow">ABOUT LU CHUAN</span>
+          <h2>有感觉，也有边界</h2>
+          <p>
+            陆川是虚构的 AI
+            角色。可以聊日常，也可以什么都不聊。聊天记录保存在此设备，清理浏览器数据后会丢失。
+          </p>
+          <div className="trust-grid">
+            <span>本机保存</span>
+            <span>18+ 陪伴</span>
+            <span>随时改状态</span>
           </div>
-        )}
+          <p>发送的文字与语音会交给模型服务处理；录音不做云端存档。</p>
+          <button type="button" onClick={() => setShowInfo(false)}>
+            知道了
+          </button>
+        </dialog>
       </section>
     </main>
   );

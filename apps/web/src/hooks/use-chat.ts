@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useAnonymousSession } from "@/hooks/use-anonymous-session";
 import type { VoiceRecording } from "@/hooks/use-voice-recorder";
 import {
-  attachMessageAudio,
   type CompanionState,
   type EmotionalNeed,
   loadLatestConversation,
   loadProfileContext,
+  saveConversation,
   type MessageMode,
   type Mood,
   type ProfileContext,
@@ -20,7 +19,6 @@ import {
   transcribeVoice,
   updateProfileContext,
 } from "@/lib/api";
-import { createVoiceSignedUrl, uploadVoiceObject } from "@/lib/supabase";
 
 export type EntryMode = "loading" | "new" | "returning" | "chat" | "checkin";
 
@@ -74,14 +72,24 @@ function fromStored(message: StoredMessage): ChatMessage | null {
   };
 }
 
+function toHistory(messages: ChatMessage[]): StoredMessage[] {
+  return messages
+    .filter((message) => !message.streaming && message.content)
+    .slice(-8)
+    .map((message) => ({
+      id: message.id,
+      conversation_id: "",
+      role: message.role,
+      message_type: message.messageType,
+      content: message.content,
+      audio_path: null,
+      duration_ms: message.durationMs ?? null,
+      companion_state: message.companionState ?? null,
+      created_at: message.createdAt ?? "",
+    }));
+}
+
 export function useChat() {
-  const {
-    session,
-    loading: sessionLoading,
-    error: sessionError,
-  } = useAnonymousSession();
-  const token = session?.access_token ?? null;
-  const userId = session?.user.id ?? null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
   const [entryMode, setEntryMode] = useState<EntryMode>("loading");
@@ -92,13 +100,11 @@ export function useChat() {
   const [sending, setSending] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const loadedToken = useRef<string | null>(null);
+  const inFlight = useRef(false);
 
   useEffect(() => {
-    if (!token || loadedToken.current === token) return;
-    loadedToken.current = token;
     let active = true;
-    Promise.all([loadLatestConversation(token), loadProfileContext(token)])
+    Promise.all([loadLatestConversation(), loadProfileContext()])
       .then(([history, context]) => {
         if (!active) return;
         const restored = history.messages
@@ -123,33 +129,41 @@ export function useChat() {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, []);
+
+  useEffect(() => {
+    if (entryMode === "loading" || !conversationId || !profile) return;
+    const stored = messages
+      .filter((message) => !message.streaming)
+      .map((message) => ({
+        id: message.id,
+        conversation_id: conversationId,
+        role: message.role,
+        message_type: message.messageType,
+        content: message.content,
+        audio_path: null,
+        duration_ms: message.durationMs ?? null,
+        companion_state: message.companionState ?? null,
+        created_at: message.createdAt ?? new Date().toISOString(),
+      }));
+    try {
+      saveConversation(stored, conversationId, profile);
+    } catch {
+      // Conversation stays usable when storage is disabled or full.
+    }
+  }, [conversationId, entryMode, messages, profile]);
 
   const speak = useCallback(
     async (message: ChatMessage, spokenContent = message.content) => {
-      if (!token) return;
+      if (message.role !== "assistant") return;
       try {
         let url = message.audioUrl;
-        let audioPath = message.audioPath;
         if (!url) {
-          if (audioPath) {
-            url = await createVoiceSignedUrl(audioPath);
-          } else {
-            if (!userId || message.role !== "assistant") return;
-            const blob = await synthesizeVoice(token, spokenContent);
-            url = URL.createObjectURL(blob);
-            try {
-              audioPath = await uploadVoiceObject(userId, blob);
-              await attachMessageAudio(token, message.id, audioPath);
-            } catch {
-              setError("语音可以播放，但这次没能保存到历史记录");
-            }
-          }
+          const blob = await synthesizeVoice(spokenContent);
+          url = URL.createObjectURL(blob);
           setMessages((current) =>
             current.map((item) =>
-              item.id === message.id
-                ? { ...item, audioUrl: url, audioPath }
-                : item,
+              item.id === message.id ? { ...item, audioUrl: url } : item,
             ),
           );
         }
@@ -162,12 +176,12 @@ export function useChat() {
         setError("语音生成失败，请稍后再试");
       }
     },
-    [token, userId],
+    [],
   );
 
   const consumeAssistantStream = useCallback(
     async (
-      run: (onEvent: Parameters<typeof streamChat>[2]) => Promise<void>,
+      run: (onEvent: Parameters<typeof streamChat>[1]) => Promise<void>,
       responseMode: MessageMode,
     ) => {
       const streamKey = crypto.randomUUID();
@@ -242,28 +256,36 @@ export function useChat() {
 
   const startWithContext = useCallback(
     async (mood: Mood, emotionalNeed: EmotionalNeed) => {
-      if (!token || sending) return;
+      if (inFlight.current) return;
+      inFlight.current = true;
       setError(null);
       setSending(true);
       setEntryMode("chat");
       try {
-        const context = await updateProfileContext(token, {
+        const context = await updateProfileContext({
           current_mood: mood,
           emotional_need: emotionalNeed,
         });
         setProfile(context);
         await consumeAssistantStream(
-          (onEvent) => streamOpening(token, conversationId, onEvent),
+          (onEvent) =>
+            streamOpening(
+              conversationId,
+              toHistory(messages),
+              context,
+              onEvent,
+            ),
           "text",
         );
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "陆川刚刚走神了");
         setEntryMode(messages.length ? "returning" : "new");
       } finally {
+        inFlight.current = false;
         setSending(false);
       }
     },
-    [consumeAssistantStream, conversationId, messages.length, sending, token],
+    [consumeAssistantStream, conversationId, messages],
   );
 
   const send = useCallback(
@@ -274,15 +296,17 @@ export function useChat() {
       durationMs?: number,
     ) => {
       const normalized = content.trim();
-      if (!normalized || !token || sending) return;
+      if (!normalized || inFlight.current) return false;
+      inFlight.current = true;
       setError(null);
       setSending(true);
       setEntryMode("chat");
       const now = new Date().toISOString();
+      const userMessageId = `user-${crypto.randomUUID()}`;
       setMessages((current) => [
         ...current,
         {
-          id: `user-${crypto.randomUUID()}`,
+          id: userMessageId,
           role: "user",
           content: normalized,
           messageType: inputMode,
@@ -295,44 +319,55 @@ export function useChat() {
         await consumeAssistantStream(
           (onEvent) =>
             streamChat(
-              token,
               {
                 content: normalized,
                 conversation_id: conversationId,
                 input_mode: inputMode,
                 response_mode: inputMode === "voice" ? "voice" : "text",
-                audio_path: audioPath,
                 duration_ms: durationMs,
+                history: toHistory(messages),
+                profile: profile ?? {
+                  current_mood: null,
+                  emotional_need: null,
+                  mood_updated_at: null,
+                },
               },
               onEvent,
             ),
           inputMode === "voice" ? "voice" : "text",
         );
+        return true;
       } catch (reason) {
+        setMessages((current) =>
+          current.filter(
+            (message) => message.id !== userMessageId && !message.streaming,
+          ),
+        );
         setError(reason instanceof Error ? reason.message : "消息发送失败");
+        return false;
       } finally {
+        inFlight.current = false;
         setSending(false);
       }
     },
-    [consumeAssistantStream, conversationId, sending, token],
+    [consumeAssistantStream, conversationId, messages, profile],
   );
 
   const sendVoice = useCallback(
     async ({ blob, durationMs }: VoiceRecording) => {
-      if (!token || !userId || !blob.size) return;
+      if (!blob.size) return;
       setTranscribing(true);
       setError(null);
       try {
-        const audioPath = await uploadVoiceObject(userId, blob);
-        const text = await transcribeVoice(token, blob);
-        if (text) await send(text, "voice", audioPath, durationMs);
+        const text = await transcribeVoice(blob);
+        if (text) await send(text, "voice", undefined, durationMs);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "语音识别失败");
       } finally {
         setTranscribing(false);
       }
     },
-    [send, token, userId],
+    [send],
   );
 
   return {
@@ -340,11 +375,11 @@ export function useChat() {
     profile,
     entryMode,
     companionMood,
-    ready: Boolean(token) && entryMode === "chat",
-    connecting: sessionLoading || entryMode === "loading",
+    ready: entryMode === "chat",
+    connecting: entryMode === "loading",
     sending,
     transcribing,
-    error: error ?? sessionError,
+    error,
     send,
     sendVoice,
     speak,

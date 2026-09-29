@@ -1,3 +1,5 @@
+import { readConversation, writeConversation } from "@/lib/local-store";
+
 export type MessageMode = "text" | "voice";
 export type Mood = "轻松" | "开心" | "疲惫" | "委屈" | "心烦" | "心动";
 export type EmotionalNeed =
@@ -11,13 +13,22 @@ export type CompanionState =
   | "jealous"
   | "thinking"
   | "calm";
-
 export type ProfileContext = {
   current_mood: Mood | null;
   emotional_need: EmotionalNeed | null;
   mood_updated_at: string | null;
 };
-
+export type StoredMessage = {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "system";
+  message_type: MessageMode;
+  content: string;
+  audio_path: string | null;
+  duration_ms: number | null;
+  companion_state: CompanionState | null;
+  created_at: string;
+};
 export type StreamEvent =
   | { type: "start"; conversation_id: string }
   | {
@@ -39,40 +50,24 @@ export type StreamEvent =
     }
   | { type: "done" };
 
-export type StoredMessage = {
-  id: string;
-  conversation_id: string;
-  role: "user" | "assistant" | "system";
-  message_type: MessageMode;
+type ChatInput = {
   content: string;
-  audio_path: string | null;
-  duration_ms: number | null;
-  companion_state: CompanionState | null;
-  created_at: string;
+  conversation_id: string | null;
+  input_mode: MessageMode;
+  response_mode: MessageMode;
+  history: StoredMessage[];
+  profile: ProfileContext;
+  duration_ms?: number;
 };
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
-).replace(/\/$/, "");
-
-async function apiFetch(path: string, token: string, init?: RequestInit) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+async function routeFetch(path: string, init?: RequestInit) {
+  const response = await fetch(path, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(init?.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
-      ...init?.headers,
-    },
+    signal: init?.signal ?? AbortSignal.timeout(55_000),
   });
   if (!response.ok) {
-    let detail = "连接暂时走神了，请稍后再试";
-    try {
-      const payload = (await response.json()) as { detail?: string };
-      if (payload.detail) detail = payload.detail;
-    } catch {}
-    throw new Error(detail);
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || "连接暂时走神了，请稍后再试");
   }
   return response;
 }
@@ -89,29 +84,21 @@ export async function consumeNdjson(
     buffer += decoder.decode(value, { stream: !done });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
-    for (const line of lines) {
+    for (const line of lines)
       if (line.trim()) onEvent(JSON.parse(line) as StreamEvent);
-    }
     if (done) break;
   }
   if (buffer.trim()) onEvent(JSON.parse(buffer) as StreamEvent);
 }
 
 export async function streamChat(
-  token: string,
-  input: {
-    content: string;
-    conversation_id: string | null;
-    input_mode: MessageMode;
-    response_mode: MessageMode;
-    audio_path?: string;
-    duration_ms?: number;
-  },
+  input: ChatInput,
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal,
 ) {
-  const response = await apiFetch("/v1/chat/stream", token, {
+  const response = await routeFetch("/api/chat", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
     signal,
   });
@@ -120,80 +107,78 @@ export async function streamChat(
 }
 
 export async function streamOpening(
-  token: string,
   conversationId: string | null,
+  history: StoredMessage[],
+  profile: ProfileContext,
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal,
 ) {
-  const response = await apiFetch("/v1/chat/opening", token, {
-    method: "POST",
-    body: JSON.stringify({ conversation_id: conversationId }),
+  await streamChat(
+    {
+      content: "请按当前状态主动自然地开场。",
+      conversation_id: conversationId,
+      input_mode: "text",
+      response_mode: "text",
+      history,
+      profile,
+    },
+    onEvent,
     signal,
-  });
-  if (!response.body) throw new Error("浏览器不支持流式对话");
-  await consumeNdjson(response.body, onEvent);
-}
-
-export async function loadProfileContext(token: string) {
-  const response = await apiFetch("/v1/profile/context", token);
-  return (await response.json()) as ProfileContext;
-}
-
-export async function updateProfileContext(
-  token: string,
-  input: { current_mood: Mood; emotional_need: EmotionalNeed },
-) {
-  const response = await apiFetch("/v1/profile/context", token, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
-  return (await response.json()) as ProfileContext;
-}
-
-export async function loadLatestConversation(token: string) {
-  const conversationsResponse = await apiFetch("/v1/conversations", token);
-  const conversations = (await conversationsResponse.json()) as Array<{
-    id: string;
-  }>;
-  if (!conversations[0])
-    return { conversationId: null, messages: [] as StoredMessage[] };
-  const conversationId = conversations[0].id;
-  const messagesResponse = await apiFetch(
-    `/v1/conversations/${conversationId}/messages`,
-    token,
   );
+}
+
+export async function loadLatestConversation() {
+  const conversation = readConversation();
   return {
-    conversationId,
-    messages: (await messagesResponse.json()) as StoredMessage[],
+    conversationId: conversation.id || null,
+    messages: conversation.messages,
   };
 }
 
-export async function transcribeVoice(token: string, blob: Blob) {
+export async function loadProfileContext() {
+  return readConversation().profile;
+}
+
+export async function updateProfileContext(input: {
+  current_mood: Mood;
+  emotional_need: EmotionalNeed;
+}) {
+  const conversation = readConversation();
+  const profile: ProfileContext = {
+    ...input,
+    mood_updated_at: new Date().toISOString(),
+  };
+  try {
+    writeConversation({ ...conversation, profile });
+  } catch {
+    // Browsing with storage disabled still allows this session to continue.
+  }
+  return profile;
+}
+
+export function saveConversation(
+  messages: StoredMessage[],
+  conversationId: string,
+  profile: ProfileContext,
+) {
+  writeConversation({ id: conversationId, messages, profile });
+}
+
+export async function transcribeVoice(blob: Blob) {
   const form = new FormData();
   form.append("audio", blob, "voice.webm");
-  const response = await apiFetch("/v1/voice/transcribe", token, {
+  const response = await routeFetch("/api/voice/transcribe", {
     method: "POST",
     body: form,
   });
   return ((await response.json()) as { text: string }).text;
 }
 
-export async function synthesizeVoice(token: string, content: string) {
-  const response = await apiFetch("/v1/voice/speech", token, {
+export async function synthesizeVoice(content: string) {
+  const response = await routeFetch("/api/voice/speech", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
   });
   return response.blob();
-}
-
-export async function attachMessageAudio(
-  token: string,
-  messageId: string,
-  audioPath: string,
-  durationMs?: number,
-) {
-  await apiFetch(`/v1/messages/${messageId}/audio`, token, {
-    method: "PATCH",
-    body: JSON.stringify({ audio_path: audioPath, duration_ms: durationMs }),
-  });
 }
