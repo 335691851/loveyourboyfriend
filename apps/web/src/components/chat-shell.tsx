@@ -4,23 +4,14 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { EmotionCheckin } from "@/components/emotion-checkin";
 import { useChat, type ChatMessage } from "@/hooks/use-chat";
-import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
 
-function Icon({
-  name,
-}: {
-  name: "mood" | "more" | "voice" | "send" | "sound";
-}) {
+function Icon({ name }: { name: "mood" | "more" | "send" }) {
   const paths = {
     mood: (
       <path d="M12 3a9 9 0 1 0 9 9M8.5 10h.01M15.5 10h.01M8 15c1.1.8 2.4 1.2 4 1.2s2.9-.4 4-1.2M17 3v4M15 5h4" />
     ),
     more: <path d="M5 12h.01M12 12h.01M19 12h.01" />,
-    voice: (
-      <path d="M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0V5Zm-3 6a6 6 0 0 0 12 0M12 17v4M9 21h6" />
-    ),
     send: <path d="m4 4 17 8-17 8 3-8-3-8Zm3 8h14" />,
-    sound: <path d="M6 10v4h3l4 3V7l-4 3H6Zm10-1a5 5 0 0 1 0 6" />,
   };
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -29,13 +20,7 @@ function Icon({
   );
 }
 
-function MessageBubble({
-  message,
-  onSpeak,
-}: {
-  message: ChatMessage;
-  onSpeak: () => void;
-}) {
+function MessageBubble({ message }: { message: ChatMessage }) {
   const time = message.createdAt
     ? new Intl.DateTimeFormat("zh-CN", {
         hour: "2-digit",
@@ -46,28 +31,8 @@ function MessageBubble({
   return (
     <div className={`message message-${message.role}`}>
       <div className="bubble">
-        {message.messageType === "voice" && (
-          <div className="voice-label">
-            <span className="mini-wave">
-              <i />
-              <i />
-              <i />
-              <i />
-            </span>
-            <span>{message.role === "user" ? "语音已转写" : "陆川的语音"}</span>
-          </div>
-        )}
         <p>{message.content || "…"}</p>
-        <div className="bubble-meta">
-          {message.messageType === "voice" &&
-            (message.role === "assistant" || message.audioPath) &&
-            !message.streaming && (
-              <button type="button" onClick={onSpeak} aria-label="播放这条语音">
-                <Icon name="sound" />
-              </button>
-            )}
-          {time && <time>{time}</time>}
-        </div>
+        <div className="bubble-meta">{time && <time>{time}</time>}</div>
       </div>
     </div>
   );
@@ -102,8 +67,7 @@ export function ChatShell() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const followRef = useRef(true);
   const endRef = useRef<HTMLDivElement>(null);
-  const recorder = useVoiceRecorder(chat.sendVoice);
-  const busy = chat.sending || chat.transcribing;
+  const busy = chat.sending;
   const showCheckin = ["new", "returning", "checkin"].includes(chat.entryMode);
 
   useEffect(() => {
@@ -149,7 +113,7 @@ export function ChatShell() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!input.trim() || busy || recorder.recording || !chat.ready) return;
+    if (!input.trim() || busy || !chat.ready) return;
     followRef.current = true;
     setAwayFromBottom(false);
     const content = input;
@@ -163,11 +127,7 @@ export function ChatShell() {
     <main className="app-stage" ref={viewportRef}>
       <section
         className={`phone-shell state-${chat.companionMood.state} ${
-          recorder.recording
-            ? "state-listening"
-            : busy
-              ? "state-responding"
-              : ""
+          busy ? "state-responding" : ""
         }`}
         aria-label="沉浸式聊天页面"
       >
@@ -180,9 +140,7 @@ export function ChatShell() {
             className="icon-button mood-button"
             type="button"
             aria-label="调整我的当前状态"
-            disabled={
-              chat.entryMode === "loading" || busy || recorder.recording
-            }
+            disabled={chat.entryMode === "loading" || busy}
             onClick={chat.showCheckin}
           >
             <Icon name="mood" />
@@ -199,7 +157,7 @@ export function ChatShell() {
               </div>
               <p className="companion-status" key={chat.companionMood.state}>
                 <i aria-hidden="true" />
-                {recorder.recording ? "听你说" : busy ? "正在输入…" : "慢慢聊"}
+                {busy ? "正在输入…" : "慢慢聊"}
               </p>
             </div>
           </div>
@@ -251,11 +209,7 @@ export function ChatShell() {
                 aria-relevant="additions text"
               >
                 {chat.messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    onSpeak={() => void chat.speak(message)}
-                  />
+                  <MessageBubble key={message.id} message={message} />
                 ))}
               </div>
               {busy && (
@@ -265,9 +219,7 @@ export function ChatShell() {
                     <span />
                     <span />
                   </div>
-                  <small>
-                    {chat.transcribing ? "正在转写语音…" : "正在输入…"}
-                  </small>
+                  <small>正在输入…</small>
                 </div>
               )}
               <div ref={endRef} />
@@ -302,31 +254,7 @@ export function ChatShell() {
 
         {chat.entryMode === "chat" && (
           <footer className="composer-wrap">
-            {recorder.recording && (
-              <div className="recording-strip">
-                <span>正在录音 · 再点麦克风发送</span>
-                <button type="button" onClick={recorder.cancel}>
-                  取消
-                </button>
-              </div>
-            )}
-            {recorder.error && (
-              <p className="recorder-error">{recorder.error}</p>
-            )}
             <form className="composer" onSubmit={submit}>
-              <button
-                className={`voice-button ${recorder.recording ? "is-recording" : ""}`}
-                type="button"
-                aria-label={recorder.recording ? "结束并发送语音" : "发送语音"}
-                disabled={!chat.ready || busy}
-                onClick={
-                  recorder.recording
-                    ? recorder.stop
-                    : () => void recorder.start()
-                }
-              >
-                <Icon name="voice" />
-              </button>
               <label className="input-wrap">
                 <span className="sr-only">输入消息</span>
                 <textarea
@@ -334,12 +262,10 @@ export function ChatShell() {
                   rows={1}
                   enterKeyHint="send"
                   aria-label="输入消息"
-                  placeholder={
-                    busy ? "可以先写下一句…" : "说点什么，或者发条语音"
-                  }
+                  placeholder={busy ? "可以先写下一句…" : "想说什么，都可以"}
                   value={input}
                   maxLength={4000}
-                  disabled={!chat.ready || recorder.recording}
+                  disabled={!chat.ready}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {
                     if (
@@ -358,9 +284,7 @@ export function ChatShell() {
                 className="send-button"
                 type="submit"
                 aria-label="发送消息"
-                disabled={
-                  !input.trim() || !chat.ready || busy || recorder.recording
-                }
+                disabled={!input.trim() || !chat.ready || busy}
               >
                 <Icon name="send" />
               </button>
@@ -399,7 +323,7 @@ export function ChatShell() {
             <span>18+ 陪伴</span>
             <span>随时改状态</span>
           </div>
-          <p>发送的文字与语音会交给模型服务处理；录音不做云端存档。</p>
+          <p>发送的文字会交给模型服务处理，请避免发送敏感个人信息。</p>
           <button type="button" onClick={() => setShowInfo(false)}>
             知道了
           </button>

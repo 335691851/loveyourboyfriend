@@ -2,21 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { VoiceRecording } from "@/hooks/use-voice-recorder";
 import {
   type CompanionState,
   type EmotionalNeed,
   loadLatestConversation,
   loadProfileContext,
   saveConversation,
-  type MessageMode,
   type Mood,
   type ProfileContext,
   type StoredMessage,
   streamChat,
   streamOpening,
-  synthesizeVoice,
-  transcribeVoice,
+  streamProactive,
   updateProfileContext,
 } from "@/lib/api";
 
@@ -32,13 +29,9 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  messageType: MessageMode;
   createdAt: string | null;
   streaming?: boolean;
   streamIndex?: number;
-  audioUrl?: string;
-  audioPath?: string;
-  durationMs?: number;
   companionState?: CompanionState;
 };
 
@@ -58,16 +51,26 @@ const DEFAULT_COMPANION_MOOD: CompanionMood = {
   ...STATE_META.approaching,
 };
 
+const PROACTIVE_MIN_IDLE_MS = 45_000;
+const PROACTIVE_MAX_IDLE_MS = 100_000;
+const PROACTIVE_COOLDOWN_MS = 8 * 60_000;
+const PROACTIVE_CHANCE = 0.42;
+const PROACTIVE_MAX_PER_SESSION = 2;
+
+export function proactiveIdleDelay(random = Math.random) {
+  return Math.round(
+    PROACTIVE_MIN_IDLE_MS +
+      random() * (PROACTIVE_MAX_IDLE_MS - PROACTIVE_MIN_IDLE_MS),
+  );
+}
+
 function fromStored(message: StoredMessage): ChatMessage | null {
   if (message.role === "system") return null;
   return {
     id: message.id,
     role: message.role,
     content: message.content,
-    messageType: message.message_type,
     createdAt: message.created_at,
-    audioPath: message.audio_path ?? undefined,
-    durationMs: message.duration_ms ?? undefined,
     companionState: message.companion_state ?? undefined,
   };
 }
@@ -80,10 +83,7 @@ function toHistory(messages: ChatMessage[]): StoredMessage[] {
       id: message.id,
       conversation_id: "",
       role: message.role,
-      message_type: message.messageType,
       content: message.content,
-      audio_path: null,
-      duration_ms: message.durationMs ?? null,
       companion_state: message.companionState ?? null,
       created_at: message.createdAt ?? "",
     }));
@@ -98,9 +98,10 @@ export function useChat() {
     DEFAULT_COMPANION_MOOD,
   );
   const [sending, setSending] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const proactiveCount = useRef(0);
+  const lastProactiveAt = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -139,10 +140,7 @@ export function useChat() {
         id: message.id,
         conversation_id: conversationId,
         role: message.role,
-        message_type: message.messageType,
         content: message.content,
-        audio_path: null,
-        duration_ms: message.durationMs ?? null,
         companion_state: message.companionState ?? null,
         created_at: message.createdAt ?? new Date().toISOString(),
       }));
@@ -153,39 +151,11 @@ export function useChat() {
     }
   }, [conversationId, entryMode, messages, profile]);
 
-  const speak = useCallback(
-    async (message: ChatMessage, spokenContent = message.content) => {
-      if (message.role !== "assistant") return;
-      try {
-        let url = message.audioUrl;
-        if (!url) {
-          const blob = await synthesizeVoice(spokenContent);
-          url = URL.createObjectURL(blob);
-          setMessages((current) =>
-            current.map((item) =>
-              item.id === message.id ? { ...item, audioUrl: url } : item,
-            ),
-          );
-        }
-        try {
-          await new Audio(url).play();
-        } catch {
-          setError("语音已经准备好，点气泡里的播放键就能听");
-        }
-      } catch {
-        setError("语音生成失败，请稍后再试");
-      }
-    },
-    [],
-  );
-
   const consumeAssistantStream = useCallback(
     async (
       run: (onEvent: Parameters<typeof streamChat>[1]) => Promise<void>,
-      responseMode: MessageMode,
     ) => {
       const streamKey = crypto.randomUUID();
-      const completed: ChatMessage[] = [];
       await run((event) => {
         if (event.type === "start") setConversationId(event.conversation_id);
         if (event.type === "companion_state") {
@@ -202,7 +172,6 @@ export function useChat() {
               id: `assistant-${streamKey}-${event.index}`,
               role: "assistant",
               content: "",
-              messageType: "text",
               createdAt: new Date().toISOString(),
               streaming: true,
               streamIndex: event.index,
@@ -223,11 +192,9 @@ export function useChat() {
             id: event.id,
             role: "assistant",
             content: event.content,
-            messageType: "text",
             createdAt: new Date().toISOString(),
             companionState: event.companion_state ?? undefined,
           };
-          completed.push(finalMessage);
           setMessages((current) =>
             current.map((message) =>
               message.id === `assistant-${streamKey}-${event.index}`
@@ -237,21 +204,8 @@ export function useChat() {
           );
         }
       });
-      if (responseMode === "voice" && completed.length) {
-        const last = completed.at(-1) as ChatMessage;
-        const joined = completed.map((message) => message.content).join("。 ");
-        last.messageType = "voice";
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === last.id
-              ? { ...message, messageType: "voice" }
-              : message,
-          ),
-        );
-        await speak(last, joined);
-      }
     },
-    [speak],
+    [],
   );
 
   const startWithContext = useCallback(
@@ -267,15 +221,8 @@ export function useChat() {
           emotional_need: emotionalNeed,
         });
         setProfile(context);
-        await consumeAssistantStream(
-          (onEvent) =>
-            streamOpening(
-              conversationId,
-              toHistory(messages),
-              context,
-              onEvent,
-            ),
-          "text",
+        await consumeAssistantStream((onEvent) =>
+          streamOpening(conversationId, toHistory(messages), context, onEvent),
         );
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "陆川刚刚走神了");
@@ -288,13 +235,105 @@ export function useChat() {
     [consumeAssistantStream, conversationId, messages],
   );
 
+  const initiateProactive = useCallback(async () => {
+    if (
+      inFlight.current ||
+      !conversationId ||
+      !profile ||
+      document.visibilityState !== "visible"
+    )
+      return false;
+    inFlight.current = true;
+    setSending(true);
+    try {
+      await consumeAssistantStream((onEvent) =>
+        streamProactive(conversationId, toHistory(messages), profile, onEvent),
+      );
+      proactiveCount.current += 1;
+      lastProactiveAt.current = Date.now();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  }, [consumeAssistantStream, conversationId, messages, profile]);
+
+  useEffect(() => {
+    if (
+      entryMode !== "chat" ||
+      sending ||
+      !conversationId ||
+      !profile ||
+      !messages.some((message) => message.role === "user") ||
+      proactiveCount.current >= PROACTIVE_MAX_PER_SESSION
+    )
+      return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    let disposed = false;
+    let lastActivityAt = Date.now();
+    let targetIdle = proactiveIdleDelay();
+
+    const noteActivity = () => {
+      lastActivityAt = Date.now();
+      targetIdle = proactiveIdleDelay();
+      clearTimeout(timer);
+      timer = setTimeout(check, targetIdle);
+    };
+    const check = () => {
+      if (disposed) return;
+      const now = Date.now();
+      const idleFor = now - lastActivityAt;
+      const cooldownLeft =
+        PROACTIVE_COOLDOWN_MS - (now - lastProactiveAt.current);
+      if (
+        document.visibilityState !== "visible" ||
+        inFlight.current ||
+        idleFor < targetIdle ||
+        cooldownLeft > 0
+      ) {
+        timer = setTimeout(
+          check,
+          Math.max(1_000, targetIdle - idleFor, cooldownLeft),
+        );
+        return;
+      }
+      if (Math.random() > PROACTIVE_CHANCE) {
+        targetIdle = proactiveIdleDelay();
+        lastActivityAt = now;
+        timer = setTimeout(check, targetIdle);
+        return;
+      }
+      void initiateProactive();
+    };
+
+    const activityEvents = ["pointerdown", "keydown", "touchstart"] as const;
+    activityEvents.forEach((event) =>
+      window.addEventListener(event, noteActivity, { passive: true }),
+    );
+    document.addEventListener("visibilitychange", noteActivity);
+    timer = setTimeout(check, targetIdle);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      activityEvents.forEach((event) =>
+        window.removeEventListener(event, noteActivity),
+      );
+      document.removeEventListener("visibilitychange", noteActivity);
+    };
+  }, [
+    conversationId,
+    entryMode,
+    initiateProactive,
+    messages,
+    profile,
+    sending,
+  ]);
+
   const send = useCallback(
-    async (
-      content: string,
-      inputMode: MessageMode = "text",
-      audioPath?: string,
-      durationMs?: number,
-    ) => {
+    async (content: string) => {
       const normalized = content.trim();
       if (!normalized || inFlight.current) return false;
       inFlight.current = true;
@@ -309,32 +348,24 @@ export function useChat() {
           id: userMessageId,
           role: "user",
           content: normalized,
-          messageType: inputMode,
           createdAt: now,
-          audioPath,
-          durationMs,
         },
       ]);
       try {
-        await consumeAssistantStream(
-          (onEvent) =>
-            streamChat(
-              {
-                content: normalized,
-                conversation_id: conversationId,
-                input_mode: inputMode,
-                response_mode: inputMode === "voice" ? "voice" : "text",
-                duration_ms: durationMs,
-                history: toHistory(messages),
-                profile: profile ?? {
-                  current_mood: null,
-                  emotional_need: null,
-                  mood_updated_at: null,
-                },
+        await consumeAssistantStream((onEvent) =>
+          streamChat(
+            {
+              content: normalized,
+              conversation_id: conversationId,
+              history: toHistory(messages),
+              profile: profile ?? {
+                current_mood: null,
+                emotional_need: null,
+                mood_updated_at: null,
               },
-              onEvent,
-            ),
-          inputMode === "voice" ? "voice" : "text",
+            },
+            onEvent,
+          ),
         );
         return true;
       } catch (reason) {
@@ -353,23 +384,6 @@ export function useChat() {
     [consumeAssistantStream, conversationId, messages, profile],
   );
 
-  const sendVoice = useCallback(
-    async ({ blob, durationMs }: VoiceRecording) => {
-      if (!blob.size) return;
-      setTranscribing(true);
-      setError(null);
-      try {
-        const text = await transcribeVoice(blob);
-        if (text) await send(text, "voice", undefined, durationMs);
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "语音识别失败");
-      } finally {
-        setTranscribing(false);
-      }
-    },
-    [send],
-  );
-
   return {
     messages,
     profile,
@@ -378,11 +392,8 @@ export function useChat() {
     ready: entryMode === "chat",
     connecting: entryMode === "loading",
     sending,
-    transcribing,
     error,
     send,
-    sendVoice,
-    speak,
     startWithContext,
     continueHistory: () => setEntryMode("chat"),
     showCheckin: () => setEntryMode("checkin"),

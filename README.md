@@ -7,11 +7,11 @@
 ```text
 浏览器（React）
   ├─ localStorage：本机的会话、情绪偏好
-  └─ /api/chat、/api/voice/*：同源请求
+  └─ /api/chat：同源文字聊天请求
        └─ Vercel Functions：安全读取模型密钥并调用 OpenAI 兼容接口
 ```
 
-没有 Supabase、Render、数据库、对象存储或独立 Python 服务。用户的历史仅保留在当前浏览器；清除站点数据或换设备会开启新会话。录音只用于即时转写，合成音频只在当前页面播放。
+没有 Supabase、Render、数据库、对象存储、语音服务或独立 Python 服务。用户的历史仅保留在当前浏览器；清除站点数据或换设备会开启新会话。
 
 ## 本地开发
 

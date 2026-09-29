@@ -9,15 +9,6 @@ vi.mock("@/hooks/use-chat", () => ({
   useChat: () => useChatMock(),
 }));
 
-vi.mock("@/hooks/use-voice-recorder", () => ({
-  useVoiceRecorder: () => ({
-    recording: false,
-    error: null,
-    start: vi.fn(),
-    stop: vi.fn(),
-  }),
-}));
-
 const baseChat = {
   messages: [],
   profile: null,
@@ -26,11 +17,8 @@ const baseChat = {
   ready: false,
   connecting: false,
   sending: false,
-  transcribing: false,
   error: null,
   send: vi.fn(),
-  sendVoice: vi.fn(),
-  speak: vi.fn(),
   startWithContext: vi.fn(),
   continueHistory: vi.fn(),
   showCheckin: vi.fn(),
@@ -59,7 +47,7 @@ describe("ChatShell", () => {
     render(<ChatShell />);
 
     expect(
-      screen.getByRole("heading", { name: /先坐一会儿/ }),
+      screen.getByRole("heading", { name: /先靠近一点/ }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "委屈" }));
     fireEvent.click(screen.getByRole("button", { name: "哄哄我" }));
@@ -95,6 +83,20 @@ describe("ChatShell", () => {
     expect(input).not.toBeDisabled();
     fireEvent.change(input, { target: { value: "下一句" } });
     expect(screen.getByRole("button", { name: "发送消息" })).toBeDisabled();
+  });
+
+  it("keeps the composer text-only", () => {
+    useChatMock.mockReturnValue({
+      ...baseChat,
+      entryMode: "chat",
+      ready: true,
+    });
+    render(<ChatShell />);
+
+    expect(
+      screen.queryByRole("button", { name: /语音/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("想说什么，都可以")).toBeInTheDocument();
   });
 
   it("does not send Enter while the Chinese IME is composing", () => {
