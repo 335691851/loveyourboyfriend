@@ -21,7 +21,6 @@ type RequestBody = {
   conversation_id?: string | null;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   profile?: { current_mood?: string | null; emotional_need?: string | null };
-  response_mode?: "text" | "voice";
   interaction_mode?: "reply" | "opening" | "proactive";
 };
 
@@ -128,10 +127,6 @@ export async function POST(request: NextRequest) {
               id,
               conversation_id: conversationId,
               content: bubble,
-              message_type:
-                index === reply.bubbles.length - 1
-                  ? (body.response_mode ?? "text")
-                  : "text",
               companion_state:
                 index === reply.bubbles.length - 1 ? reply.state : null,
             }),

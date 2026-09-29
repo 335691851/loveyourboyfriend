@@ -1,6 +1,5 @@
 import { readConversation, writeConversation } from "@/lib/local-store";
 
-export type MessageMode = "text" | "voice";
 export type Mood = "轻松" | "开心" | "疲惫" | "委屈" | "心烦" | "心动";
 export type EmotionalNeed =
   "听我说" | "哄哄我" | "逗我开心" | "陪我吐槽" | "暧昧一点";
@@ -22,10 +21,7 @@ export type StoredMessage = {
   id: string;
   conversation_id: string;
   role: "user" | "assistant" | "system";
-  message_type: MessageMode;
   content: string;
-  audio_path: string | null;
-  duration_ms: number | null;
   companion_state: CompanionState | null;
   created_at: string;
 };
@@ -45,7 +41,6 @@ export type StreamEvent =
       id: string;
       conversation_id: string;
       content: string;
-      message_type: MessageMode;
       companion_state: CompanionState | null;
     }
   | { type: "done" };
@@ -53,11 +48,8 @@ export type StreamEvent =
 type ChatInput = {
   content: string;
   conversation_id: string | null;
-  input_mode: MessageMode;
-  response_mode: MessageMode;
   history: StoredMessage[];
   profile: ProfileContext;
-  duration_ms?: number;
   interaction_mode?: "reply" | "opening" | "proactive";
 };
 
@@ -118,8 +110,6 @@ export async function streamOpening(
     {
       content: "请按当前状态主动自然地开场。",
       conversation_id: conversationId,
-      input_mode: "text",
-      response_mode: "text",
       history,
       profile,
       interaction_mode: "opening",
@@ -140,8 +130,6 @@ export async function streamProactive(
     {
       content: "主动互动",
       conversation_id: conversationId,
-      input_mode: "text",
-      response_mode: "text",
       history,
       profile,
       interaction_mode: "proactive",
@@ -186,23 +174,4 @@ export function saveConversation(
   profile: ProfileContext,
 ) {
   writeConversation({ id: conversationId, messages, profile });
-}
-
-export async function transcribeVoice(blob: Blob) {
-  const form = new FormData();
-  form.append("audio", blob, "voice.webm");
-  const response = await routeFetch("/api/voice/transcribe", {
-    method: "POST",
-    body: form,
-  });
-  return ((await response.json()) as { text: string }).text;
-}
-
-export async function synthesizeVoice(content: string) {
-  const response = await routeFetch("/api/voice/speech", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-  return response.blob();
 }
