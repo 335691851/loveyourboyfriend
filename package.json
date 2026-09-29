@@ -5,20 +5,14 @@
   "scripts": {
     "dev": "pnpm dev:web",
     "dev:web": "pnpm --filter web dev",
-    "dev:api": "uv run --project apps/api uvicorn app.main:app --reload --port 8000",
-    "test": "pnpm test:web && pnpm test:api",
+    "test": "pnpm test:web",
     "test:web": "pnpm --filter web test",
-    "test:api": "uv run --project apps/api pytest -c apps/api/pyproject.toml apps/api/tests -q",
-    "lint": "pnpm lint:web && pnpm lint:api",
+    "lint": "pnpm lint:web",
     "lint:web": "pnpm --filter web lint && pnpm --filter web typecheck",
-    "lint:api": "uv run --project apps/api ruff format --check apps/api && uv run --project apps/api ruff check apps/api",
     "build": "pnpm build:web",
     "build:web": "pnpm --filter web build",
-    "format": "prettier --write \"apps/web/**/*.{js,mjs,ts,tsx,css,json}\" \"docs/**/*.md\" \"*.{json,yaml,yml,md}\" && uv run --project apps/api ruff format apps/api",
-    "format:check": "prettier --check \"apps/web/**/*.{js,mjs,ts,tsx,css,json}\" \"docs/**/*.md\" \"*.{json,yaml,yml,md}\" && uv run --project apps/api ruff format --check apps/api"
+    "format": "prettier --write \"apps/web/**/*.{js,mjs,ts,tsx,css,json}\" \"docs/**/*.md\" \"*.{json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"apps/web/**/*.{js,mjs,ts,tsx,css,json}\" \"docs/**/*.md\" \"*.{json,yaml,yml,md}\""
   },
-  "devDependencies": {
-    "prettier": "3.9.5",
-    "supabase": "2.109.1"
-  }
+  "devDependencies": { "prettier": "3.9.5" }
 }

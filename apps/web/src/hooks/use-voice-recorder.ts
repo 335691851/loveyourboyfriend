@@ -14,6 +14,9 @@ export function useVoiceRecorder(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callbackRef = useRef(onRecorded);
   const startedAtRef = useRef(0);
+  const cancelledRef = useRef(false);
+  const startingRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     callbackRef.current = onRecorded;
@@ -24,13 +27,21 @@ export function useVoiceRecorder(
   }
 
   async function start() {
+    if (startingRef.current || recorderRef.current?.state === "recording")
+      return;
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError("当前浏览器暂不支持录音");
       return;
     }
+    startingRef.current = true;
+    cancelledRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const preferred = [
         "audio/webm;codecs=opus",
@@ -47,8 +58,9 @@ export function useVoiceRecorder(
       };
       recorder.onstop = () => {
         if (timerRef.current) clearTimeout(timerRef.current);
-        setRecording(false);
+        if (mountedRef.current) setRecording(false);
         stream.getTracks().forEach((track) => track.stop());
+        if (cancelledRef.current || !mountedRef.current) return;
         callbackRef.current({
           blob: new Blob(chunks, {
             type: recorder.mimeType || preferred || "audio/mp4",
@@ -61,17 +73,32 @@ export function useVoiceRecorder(
       setRecording(true);
       timerRef.current = setTimeout(stop, 60_000);
     } catch {
-      setError("需要麦克风权限才能发送语音");
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      if (mountedRef.current) setError("需要麦克风权限才能发送语音");
+    } finally {
+      startingRef.current = false;
     }
   }
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelledRef.current = true;
+      stop();
       if (timerRef.current) clearTimeout(timerRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
-    },
-    [],
-  );
+    };
+  }, []);
 
-  return { recording, error, start, stop };
+  return {
+    recording,
+    error,
+    start,
+    stop,
+    cancel: () => {
+      cancelledRef.current = true;
+      stop();
+    },
+  };
 }

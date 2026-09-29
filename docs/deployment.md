@@ -1,49 +1,32 @@
-# 部署初始化
+# Vercel 部署
 
-项目采用单仓库、单一 `master` 生产分支：Vercel 部署前端，Render 部署 API，Supabase 提供匿名认证和 PostgreSQL。
+应用现在是单一 Next.js 项目：网页、聊天 API 与语音 API 都由 Vercel 部署。对话记录和当下情绪仅保存在用户当前浏览器的 `localStorage` 中，不使用 Supabase、Render、数据库或对象存储。
 
-## Vercel
+在 Vercel 导入仓库后，配置如下：
 
-导入 GitHub 仓库 `335691851/loveyourboyfriend`，配置：
+| 设置 | 值 |
+| --- | --- |
+| Root Directory | `apps/web` |
+| Framework | Next.js |
+| Install Command | `pnpm install --frozen-lockfile` |
+| Build Command | `pnpm build` |
 
-| 设置              | 值                               |
-| ----------------- | -------------------------------- |
-| Production Branch | `master`                         |
-| Root Directory    | `apps/web`                       |
-| Framework         | Next.js                          |
-| Install Command   | `pnpm install --frozen-lockfile` |
-| Build Command     | `pnpm build`                     |
-| Auto Deploy       | 开启                             |
+在 Vercel 的 Environment Variables 中设置以下服务端变量（不要使用 `NEXT_PUBLIC_` 前缀）：
 
-环境变量参考 `apps/web/.env.example`。`NEXT_PUBLIC_` 变量会暴露到浏览器，只能填写公开配置。
+| 变量 | 用途 |
+| --- | --- |
+| `OPENAI_API_KEY` | OpenAI 兼容模型服务的密钥 |
+| `OPENAI_BASE_URL` | 服务地址，默认 SiliconFlow OpenAI 兼容地址 |
+| `CHAT_MODEL` | 对话模型 |
+| `TRANSCRIPTION_MODEL` | 语音识别模型 |
+| `SPEECH_MODEL` | 语音合成模型 |
+| `SPEECH_VOICE` | 语音角色 |
+| `MAX_AUDIO_BYTES` | 单条上传语音的最大字节数，默认 10000000 |
 
-## Render
+将 `apps/web/.env.example` 复制为本地 `.env.local` 并填入同一组变量，即可运行 `pnpm dev`。模型密钥绝不会发送至浏览器：客户端仅调用同源的 Next.js Route Handlers。
 
-推荐使用仓库根目录的 `render.yaml` 创建 Blueprint，也可以按文件中的参数手动创建 Web Service。服务监听 `master` 并在每次提交后自动部署，健康检查路径为 `/health`。
+## 数据行为
 
-环境变量参考 `apps/api/.env.example`。以下机密只填写在 Render Dashboard，不要提交到 Git：
-
-```text
-OPENAI_API_KEY（填写 SiliconFlow API Key）
-SUPABASE_SECRET_KEY
-DATABASE_URL
-TURNSTILE_SECRET_KEY
-```
-
-取得 Render URL 后，将它配置为 Vercel 的 `NEXT_PUBLIC_API_BASE_URL`；取得 Vercel 正式域名后，将它加入 Render 的 `ALLOWED_ORIGINS`。
-
-## Supabase
-
-项目引用为 `rycwnxynvlfqkfgsksrs`。
-
-1. 在 Authentication 中开启 Anonymous Sign-Ins。
-2. 在项目设置中复制 Publishable Key、Secret Key 和 pooled `DATABASE_URL`。
-3. 审阅 `supabase/migrations/`，连接正式项目后先执行 dry-run，再应用 migration。
-4. 前端只使用 Publishable Key；Secret Key 和数据库密码只能放在 Render。
-
-当前 migration 已为业务表启用 RLS，并按 `auth.uid()` 隔离匿名用户数据。
-`pg_cron` 每日清理到期的消息、记忆和会话，活跃会话在每次新消息后续期 90 天。
-语音原文件进入私有 `voice-messages` bucket；`render.yaml` 中的
-`loveyourboyfriend-voice-cleanup` Cron Service 每天通过 Storage API 删除超过 90 天的对象。
-创建该 Cron Service 时只需同步 `SUPABASE_SECRET_KEY`，无需模型 API Key。
-本地初始化不会自动修改线上数据库。
+- 历史对话、情绪偏好与临时匿名标识保存在当前设备的浏览器中。
+- 清理浏览器站点数据或切换设备会开始新的会话。
+- 录音会经本站 API 发送到模型服务转写，不做云端存档；合成音频仅在当前页面播放。
