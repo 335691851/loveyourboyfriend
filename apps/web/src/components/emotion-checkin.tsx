@@ -41,10 +41,10 @@ export function EmotionCheckin({
       <div className="night-window" aria-hidden="true">
         <div className="moon" />
         <div className="window-line" />
-        <span>有些话，慢慢说。</span>
+        <span>今天，也想和你靠近一点。</span>
       </div>
       <div className="checkin-content">
-        <span className="eyebrow">A LITTLE CLOSER</span>
+        <span className="eyebrow">JUST YOU & ME</span>
         <h1>
           {editing ? (
             "今天，想怎么被陪着？"
@@ -52,9 +52,9 @@ export function EmotionCheckin({
             "又见面了。"
           ) : (
             <>
-              先坐一会儿。
+              先靠近一点。
               <br />
-              别急着说晚安。
+              今天也想听你说。
             </>
           )}
         </h1>
@@ -63,7 +63,7 @@ export function EmotionCheckin({
             ? "接着聊，或换个心情。"
             : editing
               ? "不想选也没关系，直接告诉他。"
-              : "今天的事，说一点给我听。"}
+              : "开心也好，委屈也好，都可以从一句话开始。"}
         </p>
         <fieldset className="choice-block" disabled={busy}>
           <legend>

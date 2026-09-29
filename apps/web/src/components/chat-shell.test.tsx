@@ -59,7 +59,7 @@ describe("ChatShell", () => {
     render(<ChatShell />);
 
     expect(
-      screen.getByRole("heading", { name: /先坐一会儿/ }),
+      screen.getByRole("heading", { name: /先靠近一点/ }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "委屈" }));
     fireEvent.click(screen.getByRole("button", { name: "哄哄我" }));
